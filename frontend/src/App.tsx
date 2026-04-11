@@ -13,6 +13,7 @@ import StudentHistory from './pages/student/History'
 import StudentProfile from './pages/student/Profile'
 import AdminCoaches from './pages/admin/Coaches'
 import Notifications from './pages/Notifications'
+import Profile from './pages/Profile'
 
 function RoleRedirect() {
   const { user, role, loading } = useAuth()
@@ -53,6 +54,7 @@ export default function App() {
 
             <Route element={<ProtectedRoute allowedRoles={['coach', 'student', 'admin']} />}>
               <Route path="/notifications" element={<Notifications />} />
+              <Route path="/profile" element={<Profile />} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />

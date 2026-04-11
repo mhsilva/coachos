@@ -11,6 +11,7 @@ interface NavItem {
 const coachNav: NavItem[] = [
   { label: 'Dashboard', path: '/coach', icon: '◈' },
   { label: 'Alunos', path: '/coach/students', icon: '⊞' },
+  { label: 'Perfil', path: '/profile', icon: '◉' },
 ]
 
 const studentNav: NavItem[] = [
@@ -21,6 +22,7 @@ const studentNav: NavItem[] = [
 
 const adminNav: NavItem[] = [
   { label: 'Usuários', path: '/admin', icon: '◈' },
+  { label: 'Perfil', path: '/profile', icon: '◉' },
 ]
 
 export function Sidebar() {

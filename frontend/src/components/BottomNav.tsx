@@ -10,6 +10,7 @@ interface NavItem {
 const coachNav: NavItem[] = [
   { label: 'Dashboard', path: '/coach' },
   { label: 'Alunos', path: '/coach/students' },
+  { label: 'Perfil', path: '/profile' },
 ]
 
 const studentNav: NavItem[] = [
@@ -20,6 +21,7 @@ const studentNav: NavItem[] = [
 
 const adminNav: NavItem[] = [
   { label: 'Usuários', path: '/admin' },
+  { label: 'Perfil', path: '/profile' },
 ]
 
 export function BottomNav() {
