@@ -56,8 +56,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .single()
 
       if (error || !data) {
-        // Profile might not exist yet (trigger still running)
-        setRole(null)
+        // Profile not found — default to student (trigger may still be running)
+        setRole('student')
         setCoachRequested(false)
         return
       }
@@ -65,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setRole((data.role as Role) ?? null)
       setCoachRequested(!!data.coach_requested_at)
     } catch {
-      setRole(null)
+      setRole('student')
       setCoachRequested(false)
     }
   }, [])
