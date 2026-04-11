@@ -110,6 +110,8 @@ async def get_workout_detail(
         "workout": {
             "id": w["id"],
             "name": w["name"],
+            "format": w.get("format", "structured"),
+            "content": w.get("content"),
             "estimated_duration_min": w.get("estimated_duration_min"),
             "exercises": exercises.data,
         },
@@ -194,6 +196,8 @@ async def add_workout_to_plan(
     workout = sb.table("workouts").insert({
         "plan_id": plan_id,
         "name": body.name,
+        "format": body.format,
+        "content": body.content,
         "weekday": body.weekday,
         "sequence_position": body.sequence_position,
         "estimated_duration_min": body.estimated_duration_min,

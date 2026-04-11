@@ -45,6 +45,8 @@ create table if not exists workouts (
   id                     uuid primary key default gen_random_uuid(),
   plan_id                uuid references workout_plans(id) on delete cascade,
   name                   text not null,
+  format                 text not null default 'structured' check (format in ('structured', 'freeform')),
+  content                text,  -- markdown content for freeform workouts
   weekday                int check (weekday between 0 and 6),
   sequence_position      int,
   estimated_duration_min int,

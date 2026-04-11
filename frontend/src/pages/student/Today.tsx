@@ -23,6 +23,8 @@ interface WorkoutDetail {
   workout: {
     id: string
     name: string
+    format: 'structured' | 'freeform'
+    content: string | null
     estimated_duration_min: number | null
     exercises: Exercise[]
   }
@@ -258,8 +260,15 @@ export default function StudentToday() {
             {selected?.workout.name}
           </h1>
           <div className="flex gap-4 mt-3 text-sm text-white/60">
-            <span>{selected?.workout.exercises.length} exercícios</span>
-            <span className="font-jetbrains">{totalSets} séries</span>
+            {selected?.workout.format !== 'freeform' && (
+              <>
+                <span>{selected?.workout.exercises.length} exercícios</span>
+                <span className="font-jetbrains">{totalSets} séries</span>
+              </>
+            )}
+            {selected?.workout.format === 'freeform' && (
+              <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">Treino livre</span>
+            )}
             {selected?.workout.estimated_duration_min && (
               <span>~{selected.workout.estimated_duration_min} min</span>
             )}
@@ -280,20 +289,31 @@ export default function StudentToday() {
           )}
         </div>
 
-        {/* Exercise list */}
-        <div className="space-y-3">
-          {selected?.workout.exercises.map(ex => (
-            <ExerciseCard
-              key={ex.id}
-              exercise={ex}
-              onLogSet={handleLogSet}
-              onComplete={handleExerciseComplete}
-            />
-          ))}
-        </div>
+        {/* Freeform content */}
+        {selected?.workout.format === 'freeform' && selected.workout.content && (
+          <div className="bg-white rounded-card border border-teal/[0.09] shadow-card p-5">
+            <div className="whitespace-pre-wrap text-sm text-teal/70 leading-relaxed font-jetbrains">
+              {selected.workout.content}
+            </div>
+          </div>
+        )}
+
+        {/* Structured: Exercise list */}
+        {selected?.workout.format !== 'freeform' && (
+          <div className="space-y-3">
+            {selected?.workout.exercises.map(ex => (
+              <ExerciseCard
+                key={ex.id}
+                exercise={ex}
+                onLogSet={handleLogSet}
+                onComplete={handleExerciseComplete}
+              />
+            ))}
+          </div>
+        )}
 
         {/* Finish button */}
-        {allExercisesDone && (
+        {(selected?.workout.format === 'freeform' || allExercisesDone) && (
           <div className="mt-6">
             {error && <p className="text-sm text-red-500 mb-3">{error}</p>}
             <button

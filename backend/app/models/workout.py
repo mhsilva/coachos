@@ -15,8 +15,10 @@ class ExerciseCreate(BaseModel):
 
 class WorkoutCreate(BaseModel):
     name: str
-    weekday: int | None = None          # 0=Mon … 6=Sun; None when schedule=sequence
-    sequence_position: int | None = None  # None when schedule=fixed_days
+    format: Literal["structured", "freeform"] = "structured"
+    content: str | None = None           # markdown body for freeform workouts
+    weekday: int | None = None           # 0=Mon … 6=Sun; None when schedule=sequence
+    sequence_position: int | None = None # None when schedule=fixed_days
     estimated_duration_min: int | None = None
 
 

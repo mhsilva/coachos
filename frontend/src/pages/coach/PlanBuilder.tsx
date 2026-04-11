@@ -17,6 +17,8 @@ interface Exercise {
 interface Workout {
   id: string
   name: string
+  format: 'structured' | 'freeform'
+  content: string | null
   weekday: number | null
   sequence_position: number | null
   estimated_duration_min: number | null
@@ -52,6 +54,8 @@ export default function PlanBuilder() {
   const [expandedWorkoutId, setExpandedWorkoutId] = useState<string | null>(null)
   const [addingWorkout, setAddingWorkout] = useState(false)
   const [workoutName, setWorkoutName] = useState('')
+  const [workoutFormat, setWorkoutFormat] = useState<'structured' | 'freeform'>('structured')
+  const [workoutContent, setWorkoutContent] = useState('')
   const [workoutWeekday, setWorkoutWeekday] = useState(0)
   const [workoutDuration, setWorkoutDuration] = useState('')
   const [savingWorkout, setSavingWorkout] = useState(false)
@@ -100,13 +104,17 @@ export default function PlanBuilder() {
       const nextPosition = plan.workouts.length + 1
       const data = await api.post<Workout>(`/workouts/plans/${plan.id}/workouts`, {
         name: workoutName,
+        format: workoutFormat,
+        content: workoutFormat === 'freeform' ? workoutContent : null,
         weekday: scheduleType === 'fixed_days' ? workoutWeekday : null,
         sequence_position: scheduleType === 'sequence' ? nextPosition : null,
         estimated_duration_min: workoutDuration ? parseInt(workoutDuration, 10) : null,
       })
-      const workout = { ...data, exercises: [] }
+      const workout = { ...data, exercises: data.exercises ?? [] }
       setPlan(prev => prev ? { ...prev, workouts: [...prev.workouts, workout] } : prev)
       setWorkoutName('')
+      setWorkoutFormat('structured')
+      setWorkoutContent('')
       setWorkoutDuration('')
       setAddingWorkout(false)
       setExpandedWorkoutId(workout.id)
@@ -309,8 +317,15 @@ export default function PlanBuilder() {
                 {/* Expanded content */}
                 {isExpanded && (
                   <div className="border-t border-teal/[0.06] px-4 pb-4">
-                    {/* Exercise list */}
-                    {workout.exercises.length > 0 && (
+                    {/* Freeform content */}
+                    {workout.format === 'freeform' && workout.content && (
+                      <div className="mt-3 prose prose-sm max-w-none text-teal/70 whitespace-pre-wrap text-sm leading-relaxed">
+                        {workout.content}
+                      </div>
+                    )}
+
+                    {/* Structured: Exercise list */}
+                    {workout.format !== 'freeform' && workout.exercises.length > 0 && (
                       <div className="mt-3 space-y-2">
                         {workout.exercises.map(ex => (
                           <div key={ex.id} className="flex items-center gap-3 py-1.5">
@@ -332,7 +347,7 @@ export default function PlanBuilder() {
                     )}
 
                     {/* Add exercise form */}
-                    {addingExerciseToId === workout.id ? (
+                    {workout.format === 'freeform' ? null : addingExerciseToId === workout.id ? (
                       <form onSubmit={e => handleAddExercise(e, workout.id)} className="mt-3 space-y-3 pt-3 border-t border-teal/[0.06]">
                         <input
                           type="text"
@@ -435,6 +450,53 @@ export default function PlanBuilder() {
               placeholder="Ex: Treino A — Peito e Tríceps"
               className="w-full border border-teal/[0.15] rounded-btn px-3 py-2.5 text-sm text-teal placeholder:text-teal/25 focus:outline-none focus:border-copper transition-colors"
             />
+
+            {/* Format selector */}
+            <div>
+              <label className="block text-xs text-teal/40 mb-1.5">Formato</label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setWorkoutFormat('structured')}
+                  className={`flex-1 rounded-btn py-2 text-xs font-medium transition-all ${
+                    workoutFormat === 'structured'
+                      ? 'bg-copper text-white shadow-btn'
+                      : 'border border-teal/[0.15] text-teal/60'
+                  }`}
+                >
+                  Estruturado
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWorkoutFormat('freeform')}
+                  className={`flex-1 rounded-btn py-2 text-xs font-medium transition-all ${
+                    workoutFormat === 'freeform'
+                      ? 'bg-copper text-white shadow-btn'
+                      : 'border border-teal/[0.15] text-teal/60'
+                  }`}
+                >
+                  Livre
+                </button>
+              </div>
+              <p className="text-xs text-teal/40 mt-1">
+                {workoutFormat === 'structured'
+                  ? 'Exercícios com séries, reps e carga'
+                  : 'Texto livre — ideal pra corrida, WOD, circuitos'}
+              </p>
+            </div>
+
+            {/* Freeform content */}
+            {workoutFormat === 'freeform' && (
+              <textarea
+                value={workoutContent}
+                onChange={e => setWorkoutContent(e.target.value)}
+                required
+                rows={6}
+                placeholder={"Ex:\n5km corrida moderada\n— ou —\n21-15-9\nThrusters 43kg\nPull-ups"}
+                className="w-full border border-teal/[0.15] rounded-btn px-3 py-2.5 text-sm text-teal placeholder:text-teal/25 focus:outline-none focus:border-copper transition-colors resize-none font-jetbrains"
+              />
+            )}
+
             <div className="flex gap-2">
               {scheduleType === 'fixed_days' && (
                 <div className="flex-1">
