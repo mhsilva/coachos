@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr
 from uuid import UUID
 from datetime import datetime
+from typing import Literal
 
 
 class UserProfile(BaseModel):
@@ -12,8 +13,9 @@ class UserProfile(BaseModel):
     created_at: datetime
 
 
-class ApproveCoachRequest(BaseModel):
+class SetRoleRequest(BaseModel):
     user_id: UUID
+    role: Literal["admin", "coach", "student"]
 
 
 class LinkStudentRequest(BaseModel):

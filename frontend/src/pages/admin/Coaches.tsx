@@ -2,134 +2,124 @@ import { useEffect, useState } from 'react'
 import { AppLayout } from '../../components/AppLayout'
 import { useAuth } from '../../hooks/useAuth'
 import { createApi } from '../../lib/api'
-import { supabase } from '../../lib/supabase'
 
-interface Coach {
+type Role = 'admin' | 'coach' | 'student'
+
+interface UserRow {
   id: string
-  user_id: string
-  approved_at: string | null
+  role: Role
+  full_name: string | null
+  avatar_url: string | null
+  is_active: boolean
   created_at: string
-  profiles: {
-    full_name: string | null
-    avatar_url: string | null
-    is_active: boolean
-  } | null
+}
+
+const roleLabel: Record<Role, string> = {
+  admin: 'Admin',
+  coach: 'Coach',
+  student: 'Aluno',
+}
+
+const roleBadge: Record<Role, string> = {
+  admin: 'bg-teal/10 text-teal',
+  coach: 'bg-copper/10 text-copper',
+  student: 'bg-gray text-teal/50',
 }
 
 export default function AdminCoaches() {
   const { session } = useAuth()
-  const [coaches, setCoaches] = useState<Coach[]>([])
+  const [users, setUsers] = useState<UserRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [approvingId, setApprovingId] = useState<string | null>(null)
+  const [settingId, setSettingId] = useState<string | null>(null)
 
-  async function fetchCoaches() {
+  async function fetchUsers() {
     if (!session?.access_token) return
-    // Direct Supabase query — admin has read-all access via RLS
-    const { data, error } = await supabase
-      .from('coaches')
-      .select('id, user_id, approved_at, created_at, profiles(full_name, avatar_url, is_active)')
-      .order('created_at', { ascending: false })
-
-    if (!error && data) setCoaches(data as unknown as Coach[])
-    setLoading(false)
-  }
-
-  useEffect(() => { fetchCoaches() }, [session])
-
-  async function handleApprove(coach: Coach) {
-    if (!session?.access_token) return
-    setApprovingId(coach.user_id)
     try {
-      await createApi(session.access_token).post('/auth/approve-coach', {
-        user_id: coach.user_id,
-      })
-      await fetchCoaches()
+      const data = await createApi(session.access_token).get<UserRow[]>('/auth/users')
+      setUsers(data)
     } catch (err) {
       console.error(err)
     } finally {
-      setApprovingId(null)
+      setLoading(false)
     }
   }
 
-  const initial = (c: Coach) =>
-    (c.profiles?.full_name ?? c.user_id).charAt(0).toUpperCase()
+  useEffect(() => { fetchUsers() }, [session])
+
+  async function handleSetRole(userId: string, role: Role) {
+    if (!session?.access_token) return
+    setSettingId(userId)
+    try {
+      await createApi(session.access_token).post('/auth/set-role', { user_id: userId, role })
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, role } : u))
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setSettingId(null)
+    }
+  }
+
+  const initial = (u: UserRow) =>
+    (u.full_name ?? u.id).charAt(0).toUpperCase()
 
   return (
     <AppLayout>
       <div className="px-4 py-6 md:px-8 max-w-2xl">
-        <h1 className="page-title mb-6">Coaches</h1>
+        <h1 className="page-title mb-6">Usuários</h1>
 
         {loading ? (
           <div className="flex justify-center py-12">
             <div className="w-7 h-7 border-4 border-copper border-t-transparent rounded-full animate-spin" />
           </div>
-        ) : coaches.length === 0 ? (
+        ) : users.length === 0 ? (
           <div className="text-center py-16">
-            <p className="text-3xl mb-3">🏆</p>
-            <p className="font-medium text-teal">Nenhum coach cadastrado</p>
+            <p className="text-3xl mb-3">👥</p>
+            <p className="font-medium text-teal">Nenhum usuário cadastrado</p>
           </div>
         ) : (
           <div className="space-y-2">
-            {coaches.map(c => {
-              const isPending = !c.approved_at
-              const isApproving = approvingId === c.user_id
-              return (
-                <div
-                  key={c.id}
-                  className="flex items-center gap-4 bg-white rounded-card border border-teal/[0.09] shadow-card p-4"
-                >
-                  {/* Avatar */}
-                  {c.profiles?.avatar_url ? (
-                    <img
-                      src={c.profiles.avatar_url}
-                      alt=""
-                      className="w-10 h-10 rounded-full object-cover shrink-0"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-teal/10 flex items-center justify-center text-sm font-bold text-teal shrink-0">
-                      {initial(c)}
-                    </div>
-                  )}
-
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-teal truncate">
-                      {c.profiles?.full_name ?? 'Coach'}
-                    </p>
-                    <p className="text-xs text-teal/40 mt-0.5">
-                      {isPending ? 'Aguardando aprovação' : 'Ativo'}
-                    </p>
+            {users.map(u => (
+              <div
+                key={u.id}
+                className="flex items-center gap-3 bg-white rounded-card border border-teal/[0.09] shadow-card p-4"
+              >
+                {/* Avatar */}
+                {u.avatar_url ? (
+                  <img src={u.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-teal/10 flex items-center justify-center text-sm font-bold text-teal shrink-0">
+                    {initial(u)}
                   </div>
+                )}
 
-                  {/* Status badge */}
-                  <span
-                    className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${
-                      isPending
-                        ? 'bg-copper/10 text-copper'
-                        : 'bg-teal/10 text-teal'
-                    }`}
-                  >
-                    {isPending ? 'Pendente' : 'Ativo'}
+                {/* Name + role badge */}
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-teal truncate">
+                    {u.full_name ?? 'Usuário'}
+                  </p>
+                  <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full mt-0.5 ${roleBadge[u.role]}`}>
+                    {roleLabel[u.role]}
                   </span>
-
-                  {/* Approve button */}
-                  {isPending && (
-                    <button
-                      type="button"
-                      onClick={() => handleApprove(c)}
-                      disabled={isApproving}
-                      className="
-                        bg-copper text-white rounded-btn px-3 py-1.5
-                        text-xs font-medium shadow-btn shrink-0
-                        hover:opacity-90 active:scale-95
-                        transition-all disabled:opacity-40
-                      "
-                    >
-                      {isApproving ? '...' : 'Aprovar'}
-                    </button>
-                  )}
                 </div>
-              )
-            })}
+
+                {/* Role selector */}
+                <select
+                  value={u.role}
+                  disabled={settingId === u.id}
+                  onChange={e => handleSetRole(u.id, e.target.value as Role)}
+                  className="
+                    border border-teal/[0.15] rounded-btn px-2 py-1.5
+                    text-sm text-teal bg-white shrink-0
+                    focus:outline-none focus:border-copper
+                    disabled:opacity-40 transition-colors
+                  "
+                >
+                  <option value="student">Aluno</option>
+                  <option value="coach">Coach</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+            ))}
           </div>
         )}
       </div>
