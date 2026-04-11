@@ -87,7 +87,7 @@ create table if not exists set_logs (
 create or replace function handle_new_user()
 returns trigger as $$
 begin
-  insert into profiles (id, role, full_name, avatar_url)
+  insert into public.profiles (id, role, full_name, avatar_url)
   values (
     new.id,
     coalesce(new.raw_app_meta_data->>'role', 'student'),
@@ -96,7 +96,7 @@ begin
   );
   return new;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
@@ -108,13 +108,13 @@ create or replace function handle_new_profile()
 returns trigger as $$
 begin
   if new.role = 'coach' then
-    insert into coaches (user_id) values (new.id);
+    insert into public.coaches (user_id) values (new.id);
   elsif new.role = 'student' then
-    insert into students (user_id) values (new.id);
+    insert into public.students (user_id) values (new.id);
   end if;
   return new;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
 
 drop trigger if exists on_profile_created on profiles;
 create trigger on_profile_created
