@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import {
   LineChart,
@@ -42,6 +42,22 @@ interface DetailData {
   sessions: Session[]
 }
 
+interface PlanWorkout {
+  id: string
+  name: string
+  weekday: number | null
+  sequence_position: number | null
+  exercises: { id: string }[]
+}
+
+interface PlanSummary {
+  id: string
+  name: string
+  schedule_type: string
+  workouts: PlanWorkout[]
+  created_at: string
+}
+
 function formatDateShort(iso: string) {
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
 }
@@ -78,23 +94,29 @@ export default function CoachStudentDetail() {
   const { id } = useParams<{ id: string }>()
   const { session } = useAuth()
   const [data, setData] = useState<DetailData | null>(null)
+  const [plans, setPlans] = useState<PlanSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedExercise, setSelectedExercise] = useState<string>('')
 
-  useEffect(() => {
+  const fetchData = useCallback(() => {
     if (!session?.access_token || !id) return
-    createApi(session.access_token)
-      .get<DetailData>(`/dashboard/student/${id}`)
-      .then(d => {
-        setData(d)
-        // Pre-select first exercise with weight data
-        const prog = buildProgressionData(d.sessions)
+    const api = createApi(session.access_token)
+    Promise.all([
+      api.get<DetailData>(`/dashboard/student/${id}`),
+      api.get<PlanSummary[]>(`/workouts/plans?student_id=${id}`),
+    ])
+      .then(([detail, plansData]) => {
+        setData(detail)
+        setPlans(plansData)
+        const prog = buildProgressionData(detail.sessions)
         const first = Object.keys(prog)[0] ?? ''
         setSelectedExercise(first)
       })
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [session, id])
+
+  useEffect(fetchData, [fetchData])
 
   const progression = useMemo(
     () => (data ? buildProgressionData(data.sessions) : {}),
@@ -146,6 +168,51 @@ export default function CoachStudentDetail() {
                   {data.sessions.length} sessões registradas
                 </p>
               </div>
+            </div>
+
+            {/* Fichas de treino */}
+            <div className="mb-8">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-syne font-bold text-lg text-teal">Fichas de treino</h2>
+                <Link
+                  to={`/coach/students/${id}/plans/new`}
+                  className="bg-copper text-white rounded-btn px-4 py-2 text-sm font-medium shadow-btn hover:opacity-90 active:scale-95 transition-all"
+                >
+                  + Nova ficha
+                </Link>
+              </div>
+
+              {plans.length === 0 ? (
+                <div className="text-center py-8 bg-white rounded-card border border-teal/[0.09]">
+                  <p className="text-sm text-teal/50">Nenhuma ficha criada para este aluno.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {plans.map(plan => {
+                    const totalExercises = plan.workouts.reduce((acc, w) => acc + (w.exercises?.length ?? 0), 0)
+                    return (
+                      <div
+                        key={plan.id}
+                        className="bg-white rounded-card border border-teal/[0.09] shadow-card p-4"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="font-syne font-bold text-teal">{plan.name}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-xs font-medium bg-teal/10 text-teal px-2 py-0.5 rounded-full">
+                                {plan.schedule_type === 'sequence' ? 'Sequencial' : 'Dias fixos'}
+                              </span>
+                              <span className="text-xs text-teal/40">
+                                {plan.workouts.length} treino{plan.workouts.length !== 1 ? 's' : ''} · {totalExercises} exercício{totalExercises !== 1 ? 's' : ''}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Progression chart */}

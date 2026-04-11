@@ -8,6 +8,7 @@ import Pending from './pages/Pending'
 import CoachDashboard from './pages/coach/Dashboard'
 import CoachStudents from './pages/coach/Students'
 import CoachStudentDetail from './pages/coach/StudentDetail'
+import CoachPlanBuilder from './pages/coach/PlanBuilder'
 import StudentToday from './pages/student/Today'
 import StudentHistory from './pages/student/History'
 import StudentProfile from './pages/student/Profile'
@@ -40,6 +41,7 @@ export default function App() {
               <Route path="/coach" element={<CoachDashboard />} />
               <Route path="/coach/students" element={<CoachStudents />} />
               <Route path="/coach/students/:id" element={<CoachStudentDetail />} />
+              <Route path="/coach/students/:id/plans/new" element={<CoachPlanBuilder />} />
             </Route>
 
             <Route element={<ProtectedRoute allowedRoles={['student']} />}>

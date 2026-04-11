@@ -116,6 +116,37 @@ async def get_workout_detail(
     }
 
 
+@router.get("/plans")
+async def get_student_plans(
+    student_id: str,
+    user: dict = Depends(require_role("coach")),
+) -> list:
+    """Return all workout plans for a student, with nested workouts and exercises."""
+    sb = get_supabase()
+
+    coach = sb.table("coaches").select("id").eq("user_id", user["sub"]).execute()
+    if not coach.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Coach não encontrado")
+
+    plans = (
+        sb.table("workout_plans")
+        .select("*, workouts(*, exercises(*))")
+        .eq("student_id", student_id)
+        .eq("coach_id", coach.data[0]["id"])
+        .order("created_at", desc=True)
+        .execute()
+    )
+
+    for plan in plans.data:
+        for workout in plan.get("workouts") or []:
+            workout["exercises"] = sorted(
+                workout.get("exercises") or [],
+                key=lambda e: e.get("order_index", 0),
+            )
+
+    return plans.data
+
+
 @router.post("/plans", status_code=status.HTTP_201_CREATED)
 async def create_plan(
     body: WorkoutPlanCreate,
