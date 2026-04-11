@@ -292,6 +292,43 @@ async def get_sent_invites(
     return invites.data
 
 
+@router.delete("/invites/{invite_id}", status_code=200)
+async def delete_invite(
+    invite_id: str,
+    user: dict = Depends(require_role("coach")),
+) -> dict:
+    """Coach cancels a pending invite."""
+    sb = get_supabase()
+
+    coach_result = sb.table("coaches").select("id").eq("user_id", user["sub"]).execute()
+    if not coach_result.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Coach não encontrado")
+    coach_id = coach_result.data[0]["id"]
+
+    # Verify invite belongs to this coach and is still pending
+    invite_result = (
+        sb.table("invites")
+        .select("id, student_id, students(user_id)")
+        .eq("id", invite_id)
+        .eq("coach_id", coach_id)
+        .eq("status", "pending")
+        .execute()
+    )
+    if not invite_result.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Convite não encontrado")
+
+    # Remove the invite
+    sb.table("invites").delete().eq("id", invite_id).execute()
+
+    # Remove the notification for the student
+    student_user_id = invite_result.data[0]["students"]["user_id"]
+    sb.table("notifications").delete().eq(
+        "user_id", student_user_id
+    ).eq("type", "invite_received").execute()
+
+    return {"detail": "Convite cancelado"}
+
+
 @router.post("/link-student", status_code=200)
 async def link_student(
     body: LinkStudentRequest,

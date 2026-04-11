@@ -90,6 +90,21 @@ export default function CoachStudents() {
   const initial = (s: Student) =>
     (s.profiles?.full_name ?? s.user_id).charAt(0).toUpperCase()
 
+  const [cancellingId, setCancellingId] = useState<string | null>(null)
+
+  async function handleCancelInvite(inviteId: string) {
+    if (!session?.access_token) return
+    setCancellingId(inviteId)
+    try {
+      await createApi(session.access_token).delete(`/auth/invites/${inviteId}`)
+      setPendingInvites(prev => prev.filter(i => i.id !== inviteId))
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setCancellingId(null)
+    }
+  }
+
   const inviteInitial = (i: Invite) =>
     (i.students?.profiles?.full_name ?? '?').charAt(0).toUpperCase()
 
@@ -189,6 +204,17 @@ export default function CoachStudents() {
                   <span className="text-xs font-medium text-copper bg-copper/10 px-2 py-0.5 rounded-full shrink-0">
                     Aguardando
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => handleCancelInvite(inv.id)}
+                    disabled={cancellingId === inv.id}
+                    className="text-teal/30 hover:text-red-500 transition-colors p-1 shrink-0 disabled:opacity-40"
+                    title="Cancelar convite"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                      <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                    </svg>
+                  </button>
                 </div>
               ))}
             </div>
