@@ -3,6 +3,7 @@ import {
   useContext,
   useEffect,
   useState,
+  useCallback,
   type ReactNode,
 } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
@@ -26,26 +27,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<Role>(null)
   const [loading, setLoading] = useState(true)
 
-  function applySession(s: Session | null) {
+  const resolveRole = useCallback(async (s: Session | null) => {
     setSession(s)
     setUser(s?.user ?? null)
-    // Role is stored in app_metadata — set via Supabase admin API or SQL
-    const r = (s?.user?.app_metadata?.role as Role | undefined) ?? null
-    setRole(r)
-  }
+
+    if (!s?.user) {
+      setRole(null)
+      return
+    }
+
+    // Prefer role from JWT app_metadata (set by admin via SQL)
+    const jwtRole = s.user.app_metadata?.role as Role | undefined
+    if (jwtRole) {
+      setRole(jwtRole)
+      return
+    }
+
+    // Fallback: fetch from profiles table (covers default 'student' on first signup)
+    const { data } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', s.user.id)
+      .single()
+
+    setRole((data?.role as Role) ?? null)
+  }, [])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
-      applySession(s)
-      setLoading(false)
+      resolveRole(s).finally(() => setLoading(false))
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, s) => applySession(s),
+      (_event, s) => resolveRole(s),
     )
 
     return () => subscription.unsubscribe()
-  }, [])
+  }, [resolveRole])
 
   async function signOut() {
     await supabase.auth.signOut()
