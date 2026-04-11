@@ -37,5 +37,8 @@ export function createApi(token: string) {
         { method: 'PATCH', body: body !== undefined ? JSON.stringify(body) : undefined },
         token,
       ),
+
+    delete: <T>(path: string) =>
+      request<T>(path, { method: 'DELETE' }, token),
   }
 }

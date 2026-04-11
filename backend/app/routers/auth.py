@@ -90,6 +90,23 @@ async def request_coach(
     return {"detail": "Solicitação enviada com sucesso"}
 
 
+@router.delete("/users/{user_id}", status_code=200)
+async def delete_user(
+    user_id: str,
+    _user: dict = Depends(require_role("admin")),
+) -> dict:
+    """Admin deletes a user entirely (auth + cascade deletes profiles, coaches, students, etc.)."""
+    sb = get_supabase()
+    try:
+        sb.auth.admin.delete_user(user_id)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Erro ao deletar usuário: {str(e)}",
+        )
+    return {"detail": "Usuário deletado com sucesso"}
+
+
 @router.post("/link-student", status_code=200)
 async def link_student(
     body: LinkStudentRequest,
