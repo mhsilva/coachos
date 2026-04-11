@@ -30,7 +30,7 @@ export default function AdminCoaches() {
       .select('id, user_id, approved_at, created_at, profiles(full_name, avatar_url, is_active)')
       .order('created_at', { ascending: false })
 
-    if (!error && data) setCoaches(data as Coach[])
+    if (!error && data) setCoaches(data as unknown as Coach[])
     setLoading(false)
   }
 

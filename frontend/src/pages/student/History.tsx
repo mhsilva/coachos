@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AppLayout } from '../../components/AppLayout'
 import { useAuth } from '../../hooks/useAuth'
-import { createApi } from '../../lib/api'
 
 interface SetLog {
   exercise_id: string
@@ -34,7 +33,7 @@ function formatDuration(start: string, end: string | null) {
 
 export default function StudentHistory() {
   const { session } = useAuth()
-  const [sessions, setSessions] = useState<Session[]>([])
+  const [sessions] = useState<Session[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
