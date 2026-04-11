@@ -1,0 +1,101 @@
+from fastapi import APIRouter, HTTPException, status, Depends
+from app.dependencies import require_role
+from app.supabase_client import get_supabase
+from datetime import date
+
+router = APIRouter()
+
+
+@router.get("/coach")
+async def coach_dashboard(user: dict = Depends(require_role("coach"))) -> dict:
+    """Return KPIs and recent load updates for the authenticated coach."""
+    sb = get_supabase()
+
+    coach = sb.table("coaches").select("id").eq("user_id", user["sub"]).execute()
+    if not coach.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Coach não encontrado")
+    coach_id = coach.data[0]["id"]
+
+    students = (
+        sb.table("students")
+        .select("id, user_id, profiles(full_name, avatar_url, is_active)")
+        .eq("coach_id", coach_id)
+        .execute()
+    )
+    student_ids = [s["id"] for s in students.data]
+    active_students = len(students.data)
+
+    sessions_today = 0
+    recent_loads: list = []
+
+    if student_ids:
+        today_str = date.today().isoformat()
+        today_sessions = (
+            sb.table("workout_sessions")
+            .select("id")
+            .in_("student_id", student_ids)
+            .gte("started_at", today_str)
+            .execute()
+        )
+        sessions_today = len(today_sessions.data)
+
+        # Recent set logs joined with exercise name and student info
+        recent = (
+            sb.table("set_logs")
+            .select(
+                "id, weight_kg, reps_done, logged_at, set_number,"
+                "exercises(name),"
+                "workout_sessions!inner(student_id, workout_sessions_students:students(profiles(full_name)))"
+            )
+            .in_("workout_sessions.student_id", student_ids)
+            .not_.is_("weight_kg", "null")
+            .order("logged_at", desc=True)
+            .limit(20)
+            .execute()
+        )
+        recent_loads = recent.data
+
+    return {
+        "active_students": active_students,
+        "sessions_today": sessions_today,
+        "students": students.data,
+        "recent_loads": recent_loads,
+    }
+
+
+@router.get("/student/{student_id}")
+async def student_detail(
+    student_id: str,
+    user: dict = Depends(require_role("coach")),
+) -> dict:
+    """Return full session history and progression data for one student."""
+    sb = get_supabase()
+
+    coach = sb.table("coaches").select("id").eq("user_id", user["sub"]).execute()
+    if not coach.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Coach não encontrado")
+
+    # Verify student belongs to this coach
+    student = (
+        sb.table("students")
+        .select("id, user_id, profiles(full_name, avatar_url)")
+        .eq("id", student_id)
+        .eq("coach_id", coach.data[0]["id"])
+        .execute()
+    )
+    if not student.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Aluno não encontrado")
+
+    sessions = (
+        sb.table("workout_sessions")
+        .select("id, started_at, finished_at, workouts(name), set_logs(*, exercises(name))")
+        .eq("student_id", student_id)
+        .order("started_at", desc=True)
+        .limit(50)
+        .execute()
+    )
+
+    return {
+        "student": student.data[0],
+        "sessions": sessions.data,
+    }
