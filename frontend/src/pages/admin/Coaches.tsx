@@ -28,6 +28,8 @@ const roleBadge: Record<Role, string> = {
   student: 'bg-gray text-teal/50',
 }
 
+type Tab = 'all' | 'requests'
+
 export default function AdminCoaches() {
   const { session } = useAuth()
   const [users, setUsers] = useState<UserRow[]>([])
@@ -36,6 +38,7 @@ export default function AdminCoaches() {
   const [search, setSearch] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmId, setConfirmId] = useState<string | null>(null)
+  const [tab, setTab] = useState<Tab>('all')
 
   async function fetchUsers() {
     if (!session?.access_token) return
@@ -94,8 +97,13 @@ export default function AdminCoaches() {
       )
     : users
 
+  // Apply tab filter
+  const tabFiltered = tab === 'requests'
+    ? filtered.filter(u => u.coach_requested_at)
+    : filtered
+
   // Sort: coach requests first, then by name
-  const sorted = [...filtered].sort((a, b) => {
+  const sorted = [...tabFiltered].sort((a, b) => {
     if (a.coach_requested_at && !b.coach_requested_at) return -1
     if (!a.coach_requested_at && b.coach_requested_at) return 1
     return (a.full_name ?? '').localeCompare(b.full_name ?? '')
@@ -105,6 +113,37 @@ export default function AdminCoaches() {
     <AppLayout>
       <div className="px-4 py-6 md:px-8 max-w-2xl">
         <h1 className="page-title mb-4">Usuários</h1>
+
+        {/* Tabs */}
+        <div className="flex gap-1 mb-4 border-b border-teal/[0.09]">
+          <button
+            type="button"
+            onClick={() => setTab('all')}
+            className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+              tab === 'all'
+                ? 'border-copper text-copper'
+                : 'border-transparent text-teal/40 hover:text-teal/60'
+            }`}
+          >
+            Todos os Usuários
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('requests')}
+            className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-1.5 ${
+              tab === 'requests'
+                ? 'border-copper text-copper'
+                : 'border-transparent text-teal/40 hover:text-teal/60'
+            }`}
+          >
+            Solicitações de Coach
+            {users.filter(u => u.coach_requested_at).length > 0 && (
+              <span className="bg-copper text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                {users.filter(u => u.coach_requested_at).length}
+              </span>
+            )}
+          </button>
+        </div>
 
         {/* Search */}
         <input

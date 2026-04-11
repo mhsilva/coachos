@@ -81,6 +81,35 @@ create table if not exists set_logs (
   logged_at   timestamptz default now()
 );
 
+create table if not exists invites (
+  id          uuid primary key default gen_random_uuid(),
+  coach_id    uuid not null references coaches(id) on delete cascade,
+  student_id  uuid not null references students(id) on delete cascade,
+  status      text not null default 'pending' check (status in ('pending', 'accepted', 'rejected')),
+  created_at  timestamptz default now(),
+  resolved_at timestamptz
+);
+
+-- Prevent duplicate pending invites from same coach to same student
+create unique index if not exists uq_invites_pending
+  on invites (coach_id, student_id)
+  where status = 'pending';
+
+create table if not exists notifications (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references profiles(id) on delete cascade,
+  type       text not null,
+  title      text not null,
+  body       text not null,
+  payload    jsonb default '{}'::jsonb,
+  is_read    boolean default false,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_notifications_user_unread
+  on notifications (user_id, is_read, created_at desc)
+  where is_read = false;
+
 -- ──────────────────────────────────────────────
 -- TRIGGERS — auto-create profile / coach / student on signup
 -- ──────────────────────────────────────────────
@@ -245,6 +274,28 @@ create policy "set_logs: coach reads students"
       where c.user_id = auth.uid()
     )
   );
+
+-- invites
+alter table invites enable row level security;
+
+create policy "invites: coach reads own sent"
+  on invites for select using (
+    coach_id in (select id from coaches where user_id = auth.uid())
+  );
+
+create policy "invites: student reads own received"
+  on invites for select using (
+    student_id in (select id from students where user_id = auth.uid())
+  );
+
+-- notifications
+alter table notifications enable row level security;
+
+create policy "notifications: own read"
+  on notifications for select using (user_id = auth.uid());
+
+create policy "notifications: own update"
+  on notifications for update using (user_id = auth.uid());
 
 -- ──────────────────────────────────────────────
 -- HELPER: assign role to a user (run in SQL Editor)

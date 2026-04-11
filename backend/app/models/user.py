@@ -20,3 +20,27 @@ class SetRoleRequest(BaseModel):
 
 class LinkStudentRequest(BaseModel):
     student_email: EmailStr
+
+
+class InviteStudentRequest(BaseModel):
+    student_email: EmailStr
+
+
+class InviteActionRequest(BaseModel):
+    invite_id: UUID
+    action: Literal["accept", "reject"]
+
+
+class NotificationOut(BaseModel):
+    id: UUID
+    type: str
+    title: str
+    body: str
+    payload: dict
+    is_read: bool
+    created_at: datetime
+
+
+class MarkReadRequest(BaseModel):
+    notification_ids: list[UUID] | None = None
+    all: bool = False

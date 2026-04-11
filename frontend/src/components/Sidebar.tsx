@@ -1,5 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import { useNotifications } from '../contexts/NotificationContext'
 
 interface NavItem {
   label: string
@@ -13,17 +14,18 @@ const coachNav: NavItem[] = [
 ]
 
 const studentNav: NavItem[] = [
-  { label: 'Treino do Dia', path: '/student', icon: '◎' },
+  { label: 'Meus Treinos', path: '/student', icon: '◎' },
   { label: 'Histórico', path: '/student/history', icon: '◷' },
   { label: 'Perfil', path: '/student/profile', icon: '◉' },
 ]
 
 const adminNav: NavItem[] = [
-  { label: 'Coaches', path: '/admin', icon: '◈' },
+  { label: 'Usuários', path: '/admin', icon: '◈' },
 ]
 
 export function Sidebar() {
   const { user, role, signOut } = useAuth()
+  const { unreadCount } = useNotifications()
   const navigate = useNavigate()
 
   const navItems =
@@ -73,6 +75,29 @@ export function Sidebar() {
             {item.label}
           </NavLink>
         ))}
+        {/* Notifications bell */}
+        <NavLink
+          to="/notifications"
+          className={({ isActive }) =>
+            `flex items-center gap-3 px-4 py-3 rounded-btn text-sm font-medium transition-colors mt-2 ${
+              isActive
+                ? 'bg-copper text-white shadow-btn'
+                : 'text-white/60 hover:bg-white/10 hover:text-white'
+            }`
+          }
+        >
+          <span className="text-lg leading-none relative">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5">
+              <path fillRule="evenodd" d="M10 2a6 6 0 00-6 6c0 1.887-.454 3.665-1.257 5.234a.75.75 0 00.515 1.076 32.91 32.91 0 003.256.508 3.5 3.5 0 006.972 0 32.903 32.903 0 003.256-.508.75.75 0 00.515-1.076A11.448 11.448 0 0116 8a6 6 0 00-6-6zm0 14.5a2 2 0 01-1.95-1.557 33.146 33.146 0 003.9 0A2 2 0 0110 16.5z" clipRule="evenodd" />
+            </svg>
+            {unreadCount > 0 && (
+              <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-0.5">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
+          </span>
+          Notificações
+        </NavLink>
       </nav>
 
       {/* User info + logout */}

@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { NotificationProvider } from './contexts/NotificationContext'
 import { ProtectedRoute } from './router/ProtectedRoute'
 
 import Login from './pages/Login'
@@ -11,6 +12,7 @@ import StudentToday from './pages/student/Today'
 import StudentHistory from './pages/student/History'
 import StudentProfile from './pages/student/Profile'
 import AdminCoaches from './pages/admin/Coaches'
+import Notifications from './pages/Notifications'
 
 function RoleRedirect() {
   const { user, role, loading } = useAuth()
@@ -27,29 +29,35 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/pending" element={<Pending />} />
-          <Route path="/" element={<RoleRedirect />} />
+        <NotificationProvider>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/pending" element={<Pending />} />
+            <Route path="/" element={<RoleRedirect />} />
 
-          <Route element={<ProtectedRoute allowedRoles={['coach']} />}>
-            <Route path="/coach" element={<CoachDashboard />} />
-            <Route path="/coach/students" element={<CoachStudents />} />
-            <Route path="/coach/students/:id" element={<CoachStudentDetail />} />
-          </Route>
+            <Route element={<ProtectedRoute allowedRoles={['coach']} />}>
+              <Route path="/coach" element={<CoachDashboard />} />
+              <Route path="/coach/students" element={<CoachStudents />} />
+              <Route path="/coach/students/:id" element={<CoachStudentDetail />} />
+            </Route>
 
-          <Route element={<ProtectedRoute allowedRoles={['student']} />}>
-            <Route path="/student" element={<StudentToday />} />
-            <Route path="/student/history" element={<StudentHistory />} />
-            <Route path="/student/profile" element={<StudentProfile />} />
-          </Route>
+            <Route element={<ProtectedRoute allowedRoles={['student']} />}>
+              <Route path="/student" element={<StudentToday />} />
+              <Route path="/student/history" element={<StudentHistory />} />
+              <Route path="/student/profile" element={<StudentProfile />} />
+            </Route>
 
-          <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
-            <Route path="/admin" element={<AdminCoaches />} />
-          </Route>
+            <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
+              <Route path="/admin" element={<AdminCoaches />} />
+            </Route>
 
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+            <Route element={<ProtectedRoute allowedRoles={['coach', 'student', 'admin']} />}>
+              <Route path="/notifications" element={<Notifications />} />
+            </Route>
+
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </NotificationProvider>
       </AuthProvider>
     </BrowserRouter>
   )

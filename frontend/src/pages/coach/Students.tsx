@@ -19,56 +19,79 @@ interface DashboardData {
   students: Student[]
 }
 
+interface Invite {
+  id: string
+  status: string
+  created_at: string
+  students: {
+    user_id: string
+    profiles: {
+      full_name: string | null
+      avatar_url: string | null
+    } | null
+  } | null
+}
+
 export default function CoachStudents() {
   const { session } = useAuth()
   const [students, setStudents] = useState<Student[]>([])
+  const [pendingInvites, setPendingInvites] = useState<Invite[]>([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [emailInput, setEmailInput] = useState('')
-  const [linking, setLinking] = useState(false)
-  const [linkError, setLinkError] = useState('')
-  const [linkSuccess, setLinkSuccess] = useState(false)
+  const [inviting, setInviting] = useState(false)
+  const [inviteError, setInviteError] = useState('')
+  const [inviteSuccess, setInviteSuccess] = useState(false)
 
   function fetchStudents() {
     if (!session?.access_token) return
-    createApi(session.access_token)
-      .get<DashboardData>('/dashboard/coach')
-      .then(d => setStudents(d.students))
+    const api = createApi(session.access_token)
+    Promise.all([
+      api.get<DashboardData>('/dashboard/coach'),
+      api.get<Invite[]>('/auth/invites/sent'),
+    ])
+      .then(([dashboard, invites]) => {
+        setStudents(dashboard.students)
+        setPendingInvites(invites.filter(i => i.status === 'pending'))
+      })
       .catch(console.error)
       .finally(() => setLoading(false))
   }
 
   useEffect(fetchStudents, [session])
 
-  async function handleLinkStudent(e: React.FormEvent) {
+  async function handleInviteStudent(e: React.FormEvent) {
     e.preventDefault()
     if (!session?.access_token) return
-    setLinking(true)
-    setLinkError('')
-    setLinkSuccess(false)
+    setInviting(true)
+    setInviteError('')
+    setInviteSuccess(false)
     try {
-      await createApi(session.access_token).post('/auth/link-student', {
+      await createApi(session.access_token).post('/auth/invite-student', {
         student_email: emailInput,
       })
-      setLinkSuccess(true)
+      setInviteSuccess(true)
       setEmailInput('')
       fetchStudents()
     } catch (err) {
-      setLinkError(err instanceof Error ? err.message : 'Erro ao vincular aluno')
+      setInviteError(err instanceof Error ? err.message : 'Erro ao convidar aluno')
     } finally {
-      setLinking(false)
+      setInviting(false)
     }
   }
 
   function closeModal() {
     setModalOpen(false)
     setEmailInput('')
-    setLinkError('')
-    setLinkSuccess(false)
+    setInviteError('')
+    setInviteSuccess(false)
   }
 
   const initial = (s: Student) =>
     (s.profiles?.full_name ?? s.user_id).charAt(0).toUpperCase()
+
+  const inviteInitial = (i: Invite) =>
+    (i.students?.profiles?.full_name ?? '?').charAt(0).toUpperCase()
 
   return (
     <AppLayout>
@@ -81,7 +104,7 @@ export default function CoachStudents() {
             onClick={() => setModalOpen(true)}
             className="bg-copper text-white rounded-btn px-4 py-2 text-sm font-medium shadow-btn hover:opacity-90 active:scale-95 transition-all"
           >
-            + Vincular aluno
+            + Convidar aluno
           </button>
         </div>
 
@@ -95,7 +118,7 @@ export default function CoachStudents() {
             <p className="text-3xl mb-3">👥</p>
             <p className="font-medium text-teal">Nenhum aluno vinculado</p>
             <p className="text-sm text-teal/50 mt-1">
-              Vincule um aluno pelo email usando o botão acima.
+              Convide um aluno pelo email usando o botão acima.
             </p>
           </div>
         ) : (
@@ -142,9 +165,38 @@ export default function CoachStudents() {
             ))}
           </div>
         )}
+
+        {/* Pending invites */}
+        {pendingInvites.length > 0 && (
+          <div className="mt-8">
+            <h2 className="font-syne font-bold text-teal text-sm mb-3">
+              Convites pendentes
+            </h2>
+            <div className="space-y-2">
+              {pendingInvites.map(inv => (
+                <div
+                  key={inv.id}
+                  className="flex items-center gap-3 bg-white rounded-card border border-copper/20 p-4"
+                >
+                  <div className="w-10 h-10 rounded-full bg-copper/10 flex items-center justify-center text-sm font-bold text-copper shrink-0">
+                    {inviteInitial(inv)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-teal truncate">
+                      {inv.students?.profiles?.full_name ?? 'Aluno'}
+                    </p>
+                  </div>
+                  <span className="text-xs font-medium text-copper bg-copper/10 px-2 py-0.5 rounded-full shrink-0">
+                    Aguardando
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Link student modal */}
+      {/* Invite student modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center px-4 pb-4 sm:pb-0">
           {/* Backdrop */}
@@ -154,12 +206,12 @@ export default function CoachStudents() {
           />
 
           <div className="relative w-full max-w-sm bg-white rounded-card shadow-xl p-6">
-            <h2 className="font-syne font-bold text-lg text-teal mb-1">Vincular aluno</h2>
+            <h2 className="font-syne font-bold text-lg text-teal mb-1">Convidar aluno</h2>
             <p className="text-sm text-teal/50 mb-5">
-              O aluno precisa ter criado uma conta antes de ser vinculado.
+              O aluno precisa ter criado uma conta. Ele receberá um convite para aceitar.
             </p>
 
-            <form onSubmit={handleLinkStudent} className="space-y-4">
+            <form onSubmit={handleInviteStudent} className="space-y-4">
               <div>
                 <label className="block text-sm text-teal/60 mb-1.5">Email do aluno</label>
                 <input
@@ -176,9 +228,9 @@ export default function CoachStudents() {
                 />
               </div>
 
-              {linkError && <p className="text-sm text-red-500">{linkError}</p>}
-              {linkSuccess && (
-                <p className="text-sm text-teal font-medium">Aluno vinculado com sucesso!</p>
+              {inviteError && <p className="text-sm text-red-500">{inviteError}</p>}
+              {inviteSuccess && (
+                <p className="text-sm text-teal font-medium">Convite enviado com sucesso!</p>
               )}
 
               <div className="flex gap-3 pt-1">
@@ -191,10 +243,10 @@ export default function CoachStudents() {
                 </button>
                 <button
                   type="submit"
-                  disabled={linking}
+                  disabled={inviting}
                   className="flex-1 bg-copper text-white rounded-btn py-2.5 text-sm font-medium shadow-btn hover:opacity-90 disabled:opacity-40 transition-all"
                 >
-                  {linking ? 'Vinculando...' : 'Vincular'}
+                  {inviting ? 'Enviando...' : 'Convidar'}
                 </button>
               </div>
             </form>
