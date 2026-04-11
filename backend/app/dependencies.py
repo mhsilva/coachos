@@ -23,11 +23,23 @@ async def get_current_user(
                 detail="Token inválido ou expirado",
             )
         user = response.user
-        # Normalise to a dict shape the rest of the app expects
+        app_metadata = user.app_metadata or {}
+
+        # Resolve role: prefer app_metadata, fallback to profiles table
+        if not app_metadata.get("role"):
+            profile = (
+                sb.table("profiles")
+                .select("role")
+                .eq("id", str(user.id))
+                .execute()
+            )
+            if profile.data:
+                app_metadata = {**app_metadata, "role": profile.data[0]["role"]}
+
         return {
             "sub": str(user.id),
             "email": user.email,
-            "app_metadata": user.app_metadata or {},
+            "app_metadata": app_metadata,
             "user_metadata": user.user_metadata or {},
         }
     except HTTPException:
