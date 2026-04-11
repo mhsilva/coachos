@@ -25,7 +25,7 @@ async def get_current_user(
         user = response.user
         # Normalise to a dict shape the rest of the app expects
         return {
-            "sub": user.id,
+            "sub": str(user.id),
             "email": user.email,
             "app_metadata": user.app_metadata or {},
             "user_metadata": user.user_metadata or {},

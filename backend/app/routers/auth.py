@@ -171,13 +171,15 @@ async def invite_student(
     if coach_profile.data:
         coach_name = coach_profile.data[0].get("full_name") or coach_name
 
-    # Create notification for the student
+    # Create notification for the student (use user_id from students table, not auth)
+    student_user_id = str(student_auth.id)
+    invite_id = str(invite.data[0]["id"])
     sb.table("notifications").insert({
-        "user_id": student_auth.id,
+        "user_id": student_user_id,
         "type": "invite_received",
         "title": "Convite de treinador",
         "body": f"{coach_name} quer ser seu treinador",
-        "payload": {"invite_id": invite.data[0]["id"]},
+        "payload": {"invite_id": invite_id},
     }).execute()
 
     return invite.data[0]

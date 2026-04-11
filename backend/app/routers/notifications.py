@@ -35,12 +35,12 @@ async def unread_count(
     sb = get_supabase()
     result = (
         sb.table("notifications")
-        .select("id", count="exact")
+        .select("id")
         .eq("user_id", user["sub"])
         .eq("is_read", False)
         .execute()
     )
-    return {"count": result.count or 0}
+    return {"count": len(result.data)}
 
 
 @router.patch("/read", status_code=200)
