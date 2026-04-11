@@ -31,6 +31,7 @@ export default function Notifications() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
   const [respondingId, setRespondingId] = useState<string | null>(null)
+  const [error, setError] = useState('')
 
   async function fetchNotifications() {
     if (!session?.access_token) return
@@ -56,6 +57,7 @@ export default function Notifications() {
   async function handleRespond(inviteId: string, action: 'accept' | 'reject', notificationId: string) {
     if (!session?.access_token) return
     setRespondingId(notificationId)
+    setError('')
     try {
       await createApi(session.access_token).post('/auth/respond-invite', {
         invite_id: inviteId,
@@ -78,8 +80,8 @@ export default function Notifications() {
         ),
       )
       await refreshCount()
-    } catch {
-      // ignore
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao responder convite')
     } finally {
       setRespondingId(null)
     }
@@ -102,6 +104,10 @@ export default function Notifications() {
             </button>
           )}
         </div>
+
+        {error && (
+          <p className="text-sm text-red-500 bg-red-50 rounded-btn px-4 py-2.5 mb-4">{error}</p>
+        )}
 
         {loading ? (
           <div className="flex justify-center py-12">

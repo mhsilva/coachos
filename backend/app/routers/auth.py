@@ -166,8 +166,10 @@ async def invite_student(
     }).execute()
 
     # Get coach name for notification
-    coach_profile = sb.table("profiles").select("full_name").eq("id", user["sub"]).single().execute()
-    coach_name = (coach_profile.data or {}).get("full_name") or user.get("email", "Coach")
+    coach_profile = sb.table("profiles").select("full_name").eq("id", user["sub"]).execute()
+    coach_name = user.get("email", "Coach")
+    if coach_profile.data:
+        coach_name = coach_profile.data[0].get("full_name") or coach_name
 
     # Create notification for the student
     sb.table("notifications").insert({
@@ -196,26 +198,29 @@ async def respond_invite(
     student_id = student_result.data[0]["id"]
 
     # Fetch the invite
-    invite = (
+    invite_result = (
         sb.table("invites")
         .select("*, coaches(user_id)")
         .eq("id", str(body.invite_id))
         .eq("student_id", student_id)
-        .single()
         .execute()
     )
-    if not invite.data:
+    if not invite_result.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Convite não encontrado")
 
-    if invite.data["status"] != "pending":
+    invite_data = invite_result.data[0]
+
+    if invite_data["status"] != "pending":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Convite já respondido")
 
-    coach_user_id = invite.data["coaches"]["user_id"]
+    coach_user_id = invite_data["coaches"]["user_id"]
     now = datetime.now(timezone.utc).isoformat()
 
     # Get student name for coach notification
-    student_profile = sb.table("profiles").select("full_name").eq("id", user["sub"]).single().execute()
-    student_name = (student_profile.data or {}).get("full_name") or user.get("email", "Aluno")
+    student_profile_result = sb.table("profiles").select("full_name").eq("id", user["sub"]).execute()
+    student_name = user.get("email", "Aluno")
+    if student_profile_result.data:
+        student_name = student_profile_result.data[0].get("full_name") or student_name
 
     if body.action == "accept":
         # Accept this invite
@@ -226,7 +231,7 @@ async def respond_invite(
 
         # Link student to coach
         sb.table("students").update({
-            "coach_id": invite.data["coach_id"],
+            "coach_id": invite_data["coach_id"],
         }).eq("id", student_id).execute()
 
         # Reject all other pending invites for this student
