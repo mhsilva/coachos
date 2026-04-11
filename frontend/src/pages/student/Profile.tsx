@@ -86,7 +86,7 @@ export default function StudentProfile() {
                   transition-all disabled:opacity-40
                 "
               >
-                {loading ? 'Enviando...' : 'Solicitar promoção para Coach'}
+                {loading ? 'Enviando...' : 'Solicitar perfil de Coach'}
               </button>
             </>
           )}

@@ -5,7 +5,20 @@ import { useAuth } from '../../hooks/useAuth'
 import { useWorkoutSession } from '../../hooks/useSession'
 import { createApi } from '../../lib/api'
 
-interface WorkoutOption {
+interface WorkoutSummary {
+  plan: string
+  workout: {
+    id: string
+    name: string
+    weekday: number | null
+    sequence_position: number | null
+    estimated_duration_min: number | null
+  }
+  times_executed: number
+  last_executed_at: string | null
+}
+
+interface WorkoutDetail {
   plan: string
   workout: {
     id: string
@@ -15,15 +28,20 @@ interface WorkoutOption {
   }
 }
 
-type Screen = 'loading' | 'empty' | 'select' | 'executing' | 'finished'
+type Screen = 'loading' | 'empty' | 'list' | 'executing' | 'finished'
+
+function formatDate(iso: string): string {
+  const d = new Date(iso)
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+}
 
 export default function StudentToday() {
   const { session } = useAuth()
   const { startSession, logSet, finishSession, loading: sessionLoading } = useWorkoutSession()
 
   const [screen, setScreen] = useState<Screen>('loading')
-  const [options, setOptions] = useState<WorkoutOption[]>([])
-  const [selected, setSelected] = useState<WorkoutOption | null>(null)
+  const [workouts, setWorkouts] = useState<WorkoutSummary[]>([])
+  const [selected, setSelected] = useState<WorkoutDetail | null>(null)
   const [completedExercises, setCompletedExercises] = useState<Set<string>>(new Set())
   const [finishing, setFinishing] = useState(false)
   const [error, setError] = useState('')
@@ -31,23 +49,26 @@ export default function StudentToday() {
   useEffect(() => {
     if (!session?.access_token) return
     createApi(session.access_token)
-      .get<WorkoutOption[]>('/workouts/today')
+      .get<WorkoutSummary[]>('/workouts/mine')
       .then(data => {
-        setOptions(data)
-        if (data.length === 0) setScreen('empty')
-        else if (data.length === 1) {
-          setSelected(data[0])
-          setScreen('executing')
-        } else {
-          setScreen('select')
-        }
+        setWorkouts(data)
+        setScreen(data.length === 0 ? 'empty' : 'list')
       })
       .catch(() => setScreen('empty'))
   }, [session])
 
-  function handleSelectWorkout(option: WorkoutOption) {
-    setSelected(option)
-    setScreen('executing')
+  async function handleSelectWorkout(workoutId: string) {
+    if (!session?.access_token) return
+    try {
+      const detail = await createApi(session.access_token)
+        .get<WorkoutDetail>(`/workouts/mine/${workoutId}`)
+      setSelected(detail)
+      setCompletedExercises(new Set())
+      setError('')
+      setScreen('executing')
+    } catch {
+      setError('Erro ao carregar treino.')
+    }
   }
 
   const handleLogSet = useCallback(
@@ -57,7 +78,6 @@ export default function StudentToday() {
       weightKg: number | null,
       repsDone: number | null,
     ) => {
-      // Start session lazily on first log
       if (!logSet) return
       await logSet({ exercise_id: exerciseId, set_number: setNumber, weight_kg: weightKg, reps_done: repsDone })
     },
@@ -88,6 +108,21 @@ export default function StudentToday() {
     }
   }
 
+  function handleBackToList() {
+    setSelected(null)
+    setCompletedExercises(new Set())
+    setError('')
+    // Refetch to update stats
+    if (!session?.access_token) return
+    createApi(session.access_token)
+      .get<WorkoutSummary[]>('/workouts/mine')
+      .then(data => {
+        setWorkouts(data)
+        setScreen(data.length === 0 ? 'empty' : 'list')
+      })
+      .catch(() => setScreen('list'))
+  }
+
   const allExercisesDone =
     selected !== null &&
     selected.workout.exercises.length > 0 &&
@@ -95,7 +130,7 @@ export default function StudentToday() {
 
   const totalSets = selected?.workout.exercises.reduce((acc, ex) => acc + ex.sets, 0) ?? 0
 
-  // ── Screens ──────────────────────────────────────────
+  // -- Screens --
 
   if (screen === 'loading') {
     return (
@@ -111,42 +146,60 @@ export default function StudentToday() {
     return (
       <AppLayout>
         <div className="px-4 py-8 md:px-8">
-          <h1 className="page-title mb-2">Treino do Dia</h1>
+          <h1 className="page-title mb-2">Meus Treinos</h1>
           <div className="mt-12 text-center">
-            <p className="text-4xl mb-3">🎉</p>
-            <p className="font-syne font-bold text-teal text-lg">Nenhum treino hoje!</p>
-            <p className="text-sm text-teal/50 mt-1">Descanse bem. Até amanhã.</p>
+            <p className="text-4xl mb-3">📋</p>
+            <p className="font-syne font-bold text-teal text-lg">Nenhum treino disponível</p>
+            <p className="text-sm text-teal/50 mt-1">
+              Seu coach ainda não cadastrou treinos para você.
+            </p>
           </div>
         </div>
       </AppLayout>
     )
   }
 
-  if (screen === 'select') {
+  if (screen === 'list') {
     return (
       <AppLayout>
         <div className="px-4 py-8 md:px-8 max-w-lg">
-          <h1 className="page-title mb-1">Treino do Dia</h1>
-          <p className="text-sm text-teal/50 mb-6">Escolha qual treino fazer hoje</p>
+          <h1 className="page-title mb-1">Meus Treinos</h1>
+          <p className="text-sm text-teal/50 mb-6">Escolha qual treino executar</p>
+
+          {error && <p className="text-sm text-red-500 mb-3">{error}</p>}
 
           <div className="space-y-3">
-            {options.map(opt => (
+            {workouts.map(w => (
               <button
-                key={opt.workout.id}
+                key={w.workout.id}
                 type="button"
-                onClick={() => handleSelectWorkout(opt)}
+                onClick={() => handleSelectWorkout(w.workout.id)}
                 className="
                   w-full text-left bg-white rounded-card border border-teal/[0.09]
                   shadow-card p-5 hover:border-copper/40 active:scale-[0.99]
                   transition-all
                 "
               >
-                <p className="text-xs text-teal/40 mb-0.5">{opt.plan}</p>
-                <p className="font-syne font-bold text-teal text-lg">{opt.workout.name}</p>
-                <p className="text-sm text-teal/50 mt-1">
-                  {opt.workout.exercises.length} exercícios
-                  {opt.workout.estimated_duration_min && ` · ~${opt.workout.estimated_duration_min} min`}
-                </p>
+                <p className="text-xs text-teal/40 mb-0.5">{w.plan}</p>
+                <p className="font-syne font-bold text-teal text-lg">{w.workout.name}</p>
+
+                <div className="flex items-center gap-3 mt-2 text-sm text-teal/50">
+                  <span className="font-jetbrains">
+                    {w.times_executed}x executado{w.times_executed !== 1 ? 's' : ''}
+                  </span>
+                  {w.last_executed_at && (
+                    <>
+                      <span className="text-teal/20">·</span>
+                      <span>Último: {formatDate(w.last_executed_at)}</span>
+                    </>
+                  )}
+                  {w.workout.estimated_duration_min && (
+                    <>
+                      <span className="text-teal/20">·</span>
+                      <span>~{w.workout.estimated_duration_min} min</span>
+                    </>
+                  )}
+                </div>
               </button>
             ))}
           </div>
@@ -165,6 +218,17 @@ export default function StudentToday() {
               Treino finalizado!
             </h2>
             <p className="text-teal/50 text-sm mt-2">Ótimo trabalho. Continue assim.</p>
+            <button
+              type="button"
+              onClick={handleBackToList}
+              className="
+                mt-6 bg-copper text-white rounded-btn px-6 py-3
+                text-sm font-medium shadow-btn
+                hover:opacity-90 active:scale-95 transition-all
+              "
+            >
+              Voltar aos treinos
+            </button>
           </div>
         </div>
       </AppLayout>
@@ -175,6 +239,18 @@ export default function StudentToday() {
   return (
     <AppLayout>
       <div className="px-4 py-6 md:px-8 max-w-lg">
+        {/* Back button */}
+        <button
+          type="button"
+          onClick={handleBackToList}
+          className="flex items-center gap-1 text-sm text-teal/50 hover:text-teal mb-4 transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+            <path fillRule="evenodd" d="M17 10a.75.75 0 01-.75.75H5.612l4.158 3.96a.75.75 0 11-1.04 1.08l-5.5-5.25a.75.75 0 010-1.08l5.5-5.25a.75.75 0 111.04 1.08L5.612 9.25H16.25A.75.75 0 0117 10z" clipRule="evenodd" />
+          </svg>
+          Voltar
+        </button>
+
         {/* Hero card */}
         <div className="bg-teal rounded-card p-5 mb-6 text-white">
           <p className="text-xs text-white/50 mb-1">{selected?.plan}</p>
@@ -189,7 +265,6 @@ export default function StudentToday() {
             )}
           </div>
 
-          {/* Start session button — shown until first set is logged */}
           {!sessionLoading && (
             <button
               type="button"

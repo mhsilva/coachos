@@ -2,14 +2,13 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from app.dependencies import require_role
 from app.supabase_client import get_supabase
 from app.models.workout import WorkoutPlanCreate, WorkoutCreate, ExerciseCreate
-from datetime import date
 
 router = APIRouter()
 
 
-@router.get("/today")
-async def get_today_workout(user: dict = Depends(require_role("student"))) -> list:
-    """Return the workout(s) scheduled for today for the authenticated student."""
+@router.get("/mine")
+async def get_my_workouts(user: dict = Depends(require_role("student"))) -> list:
+    """Return all workouts for the student with execution stats."""
     sb = get_supabase()
 
     student = sb.table("students").select("id").eq("user_id", user["sub"]).execute()
@@ -21,64 +20,100 @@ async def get_today_workout(user: dict = Depends(require_role("student"))) -> li
     if not plans.data:
         return []
 
-    today_weekday = date.today().weekday()  # 0=Monday, 6=Sunday
-    result = []
-
+    # Collect all workout ids to batch-fetch session stats
+    all_workouts: list[dict] = []
     for plan in plans.data:
-        if plan["schedule_type"] == "fixed_days":
-            for workout in plan.get("workouts") or []:
-                if workout.get("weekday") == today_weekday:
-                    exercises = (
-                        sb.table("exercises")
-                        .select("*")
-                        .eq("workout_id", workout["id"])
-                        .order("order_index")
-                        .execute()
-                    )
-                    workout["exercises"] = exercises.data
-                    result.append({"plan": plan["name"], "workout": workout})
+        for workout in plan.get("workouts") or []:
+            all_workouts.append({"plan_name": plan["name"], **workout})
 
-        elif plan["schedule_type"] == "sequence":
-            workouts_sorted = sorted(
-                plan.get("workouts") or [],
-                key=lambda w: w.get("sequence_position") or 0,
-            )
-            if not workouts_sorted:
-                continue
+    if not all_workouts:
+        return []
 
-            workout_ids = [w["id"] for w in workouts_sorted]
-            last_session = (
-                sb.table("workout_sessions")
-                .select("workout_id, finished_at")
-                .eq("student_id", student_id)
-                .in_("workout_id", workout_ids)
-                .not_.is_("finished_at", "null")
-                .order("finished_at", desc=True)
-                .limit(1)
-                .execute()
-            )
+    workout_ids = [w["id"] for w in all_workouts]
 
-            if not last_session.data:
-                next_workout = workouts_sorted[0]
-            else:
-                last_id = last_session.data[0]["workout_id"]
-                try:
-                    last_pos = workout_ids.index(last_id)
-                    next_workout = workouts_sorted[(last_pos + 1) % len(workouts_sorted)]
-                except ValueError:
-                    next_workout = workouts_sorted[0]
+    # Fetch all finished sessions for these workouts
+    sessions = (
+        sb.table("workout_sessions")
+        .select("workout_id, finished_at")
+        .eq("student_id", student_id)
+        .in_("workout_id", workout_ids)
+        .not_.is_("finished_at", "null")
+        .order("finished_at", desc=True)
+        .execute()
+    )
 
-            exercises = (
-                sb.table("exercises")
-                .select("*")
-                .eq("workout_id", next_workout["id"])
-                .order("order_index")
-                .execute()
-            )
-            next_workout["exercises"] = exercises.data
-            result.append({"plan": plan["name"], "workout": next_workout})
+    # Build stats per workout
+    stats: dict[str, dict] = {}
+    for s in sessions.data:
+        wid = s["workout_id"]
+        if wid not in stats:
+            stats[wid] = {"times_executed": 0, "last_executed_at": s["finished_at"]}
+        stats[wid]["times_executed"] += 1
+
+    result = []
+    for w in all_workouts:
+        wid = w["id"]
+        ws = stats.get(wid, {"times_executed": 0, "last_executed_at": None})
+        result.append({
+            "plan": w["plan_name"],
+            "workout": {
+                "id": w["id"],
+                "name": w["name"],
+                "weekday": w.get("weekday"),
+                "sequence_position": w.get("sequence_position"),
+                "estimated_duration_min": w.get("estimated_duration_min"),
+            },
+            "times_executed": ws["times_executed"],
+            "last_executed_at": ws["last_executed_at"],
+        })
 
     return result
+
+
+@router.get("/mine/{workout_id}")
+async def get_workout_detail(
+    workout_id: str,
+    user: dict = Depends(require_role("student")),
+) -> dict:
+    """Return a single workout with its exercises for execution."""
+    sb = get_supabase()
+
+    student = sb.table("students").select("id").eq("user_id", user["sub"]).execute()
+    if not student.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Aluno não encontrado")
+
+    # Verify the workout belongs to this student via plan
+    workout = (
+        sb.table("workouts")
+        .select("*, workout_plans!inner(student_id, name)")
+        .eq("id", workout_id)
+        .execute()
+    )
+    if not workout.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Treino não encontrado")
+
+    plan_data = workout.data[0].get("workout_plans", {})
+    if plan_data.get("student_id") != student.data[0]["id"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Treino não pertence a este aluno")
+
+    exercises = (
+        sb.table("exercises")
+        .select("*")
+        .eq("workout_id", workout_id)
+        .order("order_index")
+        .execute()
+    )
+
+    w = workout.data[0]
+    return {
+        "plan": plan_data.get("name", ""),
+        "workout": {
+            "id": w["id"],
+            "name": w["name"],
+            "estimated_duration_min": w.get("estimated_duration_min"),
+            "exercises": exercises.data,
+        },
+    }
 
 
 @router.post("/plans", status_code=status.HTTP_201_CREATED)
