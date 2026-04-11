@@ -9,6 +9,7 @@ import CoachStudents from './pages/coach/Students'
 import CoachStudentDetail from './pages/coach/StudentDetail'
 import StudentToday from './pages/student/Today'
 import StudentHistory from './pages/student/History'
+import StudentProfile from './pages/student/Profile'
 import AdminCoaches from './pages/admin/Coaches'
 
 function RoleRedirect() {
@@ -40,6 +41,7 @@ export default function App() {
           <Route element={<ProtectedRoute allowedRoles={['student']} />}>
             <Route path="/student" element={<StudentToday />} />
             <Route path="/student/history" element={<StudentHistory />} />
+            <Route path="/student/profile" element={<StudentProfile />} />
           </Route>
 
           <Route element={<ProtectedRoute allowedRoles={['admin']} />}>

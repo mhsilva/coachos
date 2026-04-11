@@ -16,6 +16,7 @@ interface AuthContextValue {
   session: Session | null
   role: Role
   loading: boolean
+  coachRequested: boolean
   signOut: () => Promise<void>
 }
 
@@ -26,6 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [role, setRole] = useState<Role>(null)
   const [loading, setLoading] = useState(true)
+  const [coachRequested, setCoachRequested] = useState(false)
 
   const resolveRole = useCallback(async (s: Session | null) => {
     setSession(s)
@@ -33,24 +35,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (!s?.user) {
       setRole(null)
+      setCoachRequested(false)
       return
     }
 
-    // Prefer role from JWT app_metadata (set by admin via SQL)
+    // Prefer role from JWT app_metadata
     const jwtRole = s.user.app_metadata?.role as Role | undefined
     if (jwtRole) {
       setRole(jwtRole)
+      setCoachRequested(false)
       return
     }
 
-    // Fallback: fetch from profiles table (covers default 'student' on first signup)
-    const { data } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', s.user.id)
-      .single()
+    // Fallback: fetch from profiles table
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('role, coach_requested_at')
+        .eq('id', s.user.id)
+        .single()
 
-    setRole((data?.role as Role) ?? null)
+      if (error || !data) {
+        // Profile might not exist yet (trigger still running)
+        setRole(null)
+        setCoachRequested(false)
+        return
+      }
+
+      setRole((data.role as Role) ?? null)
+      setCoachRequested(!!data.coach_requested_at)
+    } catch {
+      setRole(null)
+      setCoachRequested(false)
+    }
   }, [])
 
   useEffect(() => {
@@ -58,19 +75,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       resolveRole(s).finally(() => setLoading(false))
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, s) => resolveRole(s),
-    )
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, s) => {
+      resolveRole(s)
+    })
 
     return () => subscription.unsubscribe()
   }, [resolveRole])
 
   async function signOut() {
     await supabase.auth.signOut()
+    setRole(null)
+    setUser(null)
+    setSession(null)
+    setCoachRequested(false)
   }
 
   return (
-    <AuthContext.Provider value={{ user, session, role, loading, signOut }}>
+    <AuthContext.Provider
+      value={{ user, session, role, loading, coachRequested, signOut }}
+    >
       {children}
     </AuthContext.Provider>
   )

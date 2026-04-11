@@ -12,8 +12,9 @@ create table if not exists profiles (
   role       text not null check (role in ('admin', 'coach', 'student')),
   full_name  text,
   avatar_url text,
-  is_active  boolean default true,
-  created_at timestamptz default now()
+  is_active          boolean default true,
+  coach_requested_at timestamptz,
+  created_at         timestamptz default now()
 );
 
 create table if not exists coaches (

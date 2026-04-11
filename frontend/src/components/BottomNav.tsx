@@ -14,6 +14,7 @@ const coachNav: NavItem[] = [
 const studentNav: NavItem[] = [
   { label: 'Treino', path: '/student' },
   { label: 'Histórico', path: '/student/history' },
+  { label: 'Perfil', path: '/student/profile' },
 ]
 
 const adminNav: NavItem[] = [

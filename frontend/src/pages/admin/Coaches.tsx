@@ -7,10 +7,12 @@ type Role = 'admin' | 'coach' | 'student'
 
 interface UserRow {
   id: string
+  email: string | null
   role: Role
   full_name: string | null
   avatar_url: string | null
   is_active: boolean
+  coach_requested_at: string | null
   created_at: string
 }
 
@@ -31,6 +33,7 @@ export default function AdminCoaches() {
   const [users, setUsers] = useState<UserRow[]>([])
   const [loading, setLoading] = useState(true)
   const [settingId, setSettingId] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
 
   async function fetchUsers() {
     if (!session?.access_token) return
@@ -51,7 +54,11 @@ export default function AdminCoaches() {
     setSettingId(userId)
     try {
       await createApi(session.access_token).post('/auth/set-role', { user_id: userId, role })
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, role } : u))
+      setUsers(prev =>
+        prev.map(u =>
+          u.id === userId ? { ...u, role, coach_requested_at: null } : u,
+        ),
+      )
     } catch (err) {
       console.error(err)
     } finally {
@@ -60,28 +67,63 @@ export default function AdminCoaches() {
   }
 
   const initial = (u: UserRow) =>
-    (u.full_name ?? u.id).charAt(0).toUpperCase()
+    (u.full_name ?? u.email ?? u.id).charAt(0).toUpperCase()
+
+  const term = search.toLowerCase().trim()
+  const filtered = term
+    ? users.filter(
+        u =>
+          (u.full_name ?? '').toLowerCase().includes(term) ||
+          (u.email ?? '').toLowerCase().includes(term),
+      )
+    : users
+
+  // Sort: coach requests first, then by name
+  const sorted = [...filtered].sort((a, b) => {
+    if (a.coach_requested_at && !b.coach_requested_at) return -1
+    if (!a.coach_requested_at && b.coach_requested_at) return 1
+    return (a.full_name ?? '').localeCompare(b.full_name ?? '')
+  })
 
   return (
     <AppLayout>
       <div className="px-4 py-6 md:px-8 max-w-2xl">
-        <h1 className="page-title mb-6">Usuários</h1>
+        <h1 className="page-title mb-4">Usuários</h1>
+
+        {/* Search */}
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Buscar por nome ou email..."
+          className="
+            w-full border border-teal/[0.15] rounded-btn px-4 py-2.5 mb-5
+            text-sm text-teal placeholder:text-teal/30
+            focus:outline-none focus:border-copper transition-colors
+          "
+        />
 
         {loading ? (
           <div className="flex justify-center py-12">
             <div className="w-7 h-7 border-4 border-copper border-t-transparent rounded-full animate-spin" />
           </div>
-        ) : users.length === 0 ? (
+        ) : sorted.length === 0 ? (
           <div className="text-center py-16">
             <p className="text-3xl mb-3">👥</p>
-            <p className="font-medium text-teal">Nenhum usuário cadastrado</p>
+            <p className="font-medium text-teal">
+              {term ? 'Nenhum resultado encontrado' : 'Nenhum usuário cadastrado'}
+            </p>
           </div>
         ) : (
           <div className="space-y-2">
-            {users.map(u => (
+            {sorted.map(u => (
               <div
                 key={u.id}
-                className="flex items-center gap-3 bg-white rounded-card border border-teal/[0.09] shadow-card p-4"
+                className={`flex items-center gap-3 bg-white rounded-card border shadow-card p-4 ${
+                  u.coach_requested_at
+                    ? 'border-copper/30'
+                    : 'border-teal/[0.09]'
+                }`}
               >
                 {/* Avatar */}
                 {u.avatar_url ? (
@@ -92,14 +134,22 @@ export default function AdminCoaches() {
                   </div>
                 )}
 
-                {/* Name + role badge */}
+                {/* Name + email + badges */}
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-teal truncate">
                     {u.full_name ?? 'Usuário'}
                   </p>
-                  <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full mt-0.5 ${roleBadge[u.role]}`}>
-                    {roleLabel[u.role]}
-                  </span>
+                  <p className="text-xs text-teal/40 truncate">{u.email}</p>
+                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${roleBadge[u.role]}`}>
+                      {roleLabel[u.role]}
+                    </span>
+                    {u.coach_requested_at && (
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-copper/10 text-copper">
+                        Quer ser Coach
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Role selector */}
