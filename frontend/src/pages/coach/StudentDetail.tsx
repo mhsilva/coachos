@@ -215,7 +215,7 @@ export default function CoachStudentDetail() {
                         className="bg-white rounded-card border border-teal/[0.09] shadow-card p-4"
                       >
                         <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
+                          <Link to={`/coach/students/${id}/plans/${plan.id}`} className="flex-1 min-w-0 hover:opacity-80 transition-opacity">
                             <p className="font-syne font-bold text-teal">{plan.name}</p>
                             <div className="flex items-center gap-2 mt-1 flex-wrap">
                               <span className="text-xs font-medium bg-teal/10 text-teal px-2 py-0.5 rounded-full">
@@ -228,7 +228,7 @@ export default function CoachStudentDetail() {
                             {plan.notes && (
                               <p className="mt-2 text-xs text-teal/50 leading-relaxed">{plan.notes}</p>
                             )}
-                          </div>
+                          </Link>
 
                           {/* Delete action */}
                           <div className="shrink-0">

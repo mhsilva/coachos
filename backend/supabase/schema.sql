@@ -66,21 +66,23 @@ create table if not exists exercises (
 );
 
 create table if not exists workout_sessions (
-  id          uuid primary key default gen_random_uuid(),
-  student_id  uuid references students(id) on delete cascade,
-  workout_id  uuid references workouts(id) on delete cascade,
-  started_at  timestamptz default now(),
-  finished_at timestamptz
+  id            uuid primary key default gen_random_uuid(),
+  student_id    uuid references students(id) on delete cascade,
+  workout_id    uuid references workouts(id) on delete set null,
+  workout_name  text,  -- snapshot so history survives plan deletion
+  started_at    timestamptz default now(),
+  finished_at   timestamptz
 );
 
 create table if not exists set_logs (
-  id          uuid primary key default gen_random_uuid(),
-  session_id  uuid references workout_sessions(id) on delete cascade,
-  exercise_id uuid references exercises(id) on delete cascade,
-  set_number  int not null,
-  reps_done   int,
-  weight_kg   numeric(6,2),
-  logged_at   timestamptz default now()
+  id            uuid primary key default gen_random_uuid(),
+  session_id    uuid references workout_sessions(id) on delete cascade,
+  exercise_id   uuid references exercises(id) on delete set null,
+  exercise_name text,  -- snapshot so history survives exercise deletion
+  set_number    int not null,
+  reps_done     int,
+  weight_kg     numeric(6,2),
+  logged_at     timestamptz default now()
 );
 
 create table if not exists invites (

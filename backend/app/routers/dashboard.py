@@ -88,7 +88,7 @@ async def student_detail(
 
     sessions = (
         sb.table("workout_sessions")
-        .select("id, started_at, finished_at, workouts(name), set_logs(*, exercises(name))")
+        .select("id, started_at, finished_at, workout_name, workouts(name), set_logs(*, exercises(name))")
         .eq("student_id", student_id)
         .order("started_at", desc=True)
         .limit(50)

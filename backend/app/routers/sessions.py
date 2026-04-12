@@ -14,6 +14,25 @@ def _get_student_id(sb, user_sub: str) -> str:
     return result.data[0]["id"]
 
 
+@router.get("/mine")
+async def get_my_sessions(user: dict = Depends(require_role("student"))) -> list:
+    """Return all finished sessions for the student with set logs."""
+    sb = get_supabase()
+    student_id = _get_student_id(sb, user["sub"])
+
+    sessions = (
+        sb.table("workout_sessions")
+        .select("id, started_at, finished_at, workout_id, workout_name, workouts(name), set_logs(*, exercises(name))")
+        .eq("student_id", student_id)
+        .not_.is_("finished_at", "null")
+        .order("started_at", desc=True)
+        .limit(50)
+        .execute()
+    )
+
+    return sessions.data
+
+
 @router.post("/start", status_code=status.HTTP_201_CREATED)
 async def start_session(
     body: SessionStart,
@@ -23,9 +42,14 @@ async def start_session(
     sb = get_supabase()
     student_id = _get_student_id(sb, user["sub"])
 
+    # Snapshot workout name so history survives plan deletion
+    workout = sb.table("workouts").select("name").eq("id", str(body.workout_id)).execute()
+    workout_name = workout.data[0]["name"] if workout.data else None
+
     session = sb.table("workout_sessions").insert({
         "student_id": student_id,
         "workout_id": str(body.workout_id),
+        "workout_name": workout_name,
     }).execute()
 
     return session.data[0]
@@ -52,9 +76,14 @@ async def log_set(
     if not session.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sessão não encontrada")
 
+    # Snapshot exercise name so history survives deletion
+    exercise = sb.table("exercises").select("name").eq("id", str(body.exercise_id)).execute()
+    exercise_name = exercise.data[0]["name"] if exercise.data else None
+
     log = sb.table("set_logs").insert({
         "session_id": session_id,
         "exercise_id": str(body.exercise_id),
+        "exercise_name": exercise_name,
         "set_number": body.set_number,
         "reps_done": body.reps_done,
         "weight_kg": body.weight_kg,

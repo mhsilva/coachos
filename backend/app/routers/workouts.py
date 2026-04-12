@@ -1,7 +1,11 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from app.dependencies import require_role
 from app.supabase_client import get_supabase
-from app.models.workout import WorkoutPlanCreate, WorkoutCreate, ExerciseCreate
+from app.models.workout import (
+    WorkoutPlanCreate, WorkoutPlanUpdate,
+    WorkoutCreate, WorkoutUpdate,
+    ExerciseCreate, ExerciseUpdate,
+)
 
 router = APIRouter()
 
@@ -150,6 +154,38 @@ async def get_student_plans(
     return plans.data
 
 
+@router.get("/plans/{plan_id}")
+async def get_plan(
+    plan_id: str,
+    user: dict = Depends(require_role("coach")),
+) -> dict:
+    """Return a single plan with nested workouts and exercises for editing."""
+    sb = get_supabase()
+
+    coach = sb.table("coaches").select("id").eq("user_id", user["sub"]).execute()
+    if not coach.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Coach não encontrado")
+
+    plan = (
+        sb.table("workout_plans")
+        .select("*, workouts(*, exercises(*))")
+        .eq("id", plan_id)
+        .eq("coach_id", coach.data[0]["id"])
+        .execute()
+    )
+    if not plan.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plano não encontrado")
+
+    result = plan.data[0]
+    for workout in result.get("workouts") or []:
+        workout["exercises"] = sorted(
+            workout.get("exercises") or [],
+            key=lambda e: e.get("order_index", 0),
+        )
+
+    return result
+
+
 @router.post("/plans", status_code=status.HTTP_201_CREATED)
 async def create_plan(
     body: WorkoutPlanCreate,
@@ -194,6 +230,123 @@ async def delete_plan(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plano não encontrado")
 
     sb.table("workout_plans").delete().eq("id", plan_id).execute()
+
+
+@router.patch("/plans/{plan_id}")
+async def update_plan(
+    plan_id: str,
+    body: WorkoutPlanUpdate,
+    user: dict = Depends(require_role("coach")),
+) -> dict:
+    sb = get_supabase()
+    coach = sb.table("coaches").select("id").eq("user_id", user["sub"]).execute()
+    if not coach.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Coach não encontrado")
+
+    plan = (
+        sb.table("workout_plans")
+        .select("id")
+        .eq("id", plan_id)
+        .eq("coach_id", coach.data[0]["id"])
+        .execute()
+    )
+    if not plan.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plano não encontrado")
+
+    updates = body.model_dump(exclude_none=True)
+    if not updates:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nenhum campo para atualizar")
+
+    result = sb.table("workout_plans").update(updates).eq("id", plan_id).execute()
+    return result.data[0]
+
+
+@router.patch("/workouts/{workout_id}")
+async def update_workout(
+    workout_id: str,
+    body: WorkoutUpdate,
+    user: dict = Depends(require_role("coach")),
+) -> dict:
+    sb = get_supabase()
+
+    workout = (
+        sb.table("workouts")
+        .select("id, workout_plans!inner(coach_id, coaches!inner(user_id))")
+        .eq("id", workout_id)
+        .execute()
+    )
+    if not workout.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Treino não encontrado")
+
+    updates = body.model_dump(exclude_none=True)
+    if not updates:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nenhum campo para atualizar")
+
+    result = sb.table("workouts").update(updates).eq("id", workout_id).execute()
+    return result.data[0]
+
+
+@router.delete("/workouts/{workout_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_workout(
+    workout_id: str,
+    user: dict = Depends(require_role("coach")),
+) -> None:
+    sb = get_supabase()
+
+    workout = (
+        sb.table("workouts")
+        .select("id, workout_plans!inner(coach_id, coaches!inner(user_id))")
+        .eq("id", workout_id)
+        .execute()
+    )
+    if not workout.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Treino não encontrado")
+
+    sb.table("workouts").delete().eq("id", workout_id).execute()
+
+
+@router.patch("/exercises/{exercise_id}")
+async def update_exercise(
+    exercise_id: str,
+    body: ExerciseUpdate,
+    user: dict = Depends(require_role("coach")),
+) -> dict:
+    sb = get_supabase()
+
+    exercise = (
+        sb.table("exercises")
+        .select("id, workouts!inner(workout_plans!inner(coach_id, coaches!inner(user_id)))")
+        .eq("id", exercise_id)
+        .execute()
+    )
+    if not exercise.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exercício não encontrado")
+
+    updates = body.model_dump(exclude_none=True)
+    if not updates:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nenhum campo para atualizar")
+
+    result = sb.table("exercises").update(updates).eq("id", exercise_id).execute()
+    return result.data[0]
+
+
+@router.delete("/exercises/{exercise_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_exercise(
+    exercise_id: str,
+    user: dict = Depends(require_role("coach")),
+) -> None:
+    sb = get_supabase()
+
+    exercise = (
+        sb.table("exercises")
+        .select("id, workouts!inner(workout_plans!inner(coach_id, coaches!inner(user_id)))")
+        .eq("id", exercise_id)
+        .execute()
+    )
+    if not exercise.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exercício não encontrado")
+
+    sb.table("exercises").delete().eq("id", exercise_id).execute()
 
 
 @router.post("/plans/{plan_id}/workouts", status_code=status.HTTP_201_CREATED)

@@ -42,6 +42,7 @@ export default function App() {
               <Route path="/coach/students" element={<CoachStudents />} />
               <Route path="/coach/students/:id" element={<CoachStudentDetail />} />
               <Route path="/coach/students/:id/plans/new" element={<CoachPlanBuilder />} />
+              <Route path="/coach/students/:id/plans/:planId" element={<CoachPlanBuilder />} />
             </Route>
 
             <Route element={<ProtectedRoute allowedRoles={['student']} />}>

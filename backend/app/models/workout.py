@@ -34,6 +34,33 @@ class WorkoutPlanCreate(BaseModel):
     notes: str | None = None
 
 
+class WorkoutPlanUpdate(BaseModel):
+    name: str | None = None
+    notes: str | None = None
+
+
+class WorkoutUpdate(BaseModel):
+    name: str | None = None
+    content: str | None = None
+    weekday: int | None = None
+    sequence_position: int | None = None
+    estimated_duration_min: int | None = None
+    notes: str | None = None
+
+
+class ExerciseUpdate(BaseModel):
+    name: str | None = None
+    sets: int | None = None
+    reps_min: int | None = None
+    reps_max: int | None = None
+    order_index: int | None = None
+    demo_url: str | None = None
+    rest_seconds: int | None = None
+    warmup_type: Literal["aquecimento", "reconhecimento"] | None = None
+    warmup_sets: int | None = None
+    warmup_reps: int | None = None
+
+
 class ExerciseOut(ExerciseCreate):
     id: UUID
     workout_id: UUID
