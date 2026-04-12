@@ -112,6 +112,7 @@ async def get_workout_detail(
             "name": w["name"],
             "format": w.get("format", "structured"),
             "content": w.get("content"),
+            "notes": w.get("notes"),
             "estimated_duration_min": w.get("estimated_duration_min"),
             "exercises": exercises.data,
         },
@@ -165,9 +166,34 @@ async def create_plan(
         "student_id": str(body.student_id),
         "name": body.name,
         "schedule_type": body.schedule_type,
+        "notes": body.notes,
     }).execute()
 
     return plan.data[0]
+
+
+@router.delete("/plans/{plan_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_plan(
+    plan_id: str,
+    user: dict = Depends(require_role("coach")),
+) -> None:
+    sb = get_supabase()
+
+    coach = sb.table("coaches").select("id").eq("user_id", user["sub"]).execute()
+    if not coach.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Coach não encontrado")
+
+    plan = (
+        sb.table("workout_plans")
+        .select("id")
+        .eq("id", plan_id)
+        .eq("coach_id", coach.data[0]["id"])
+        .execute()
+    )
+    if not plan.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plano não encontrado")
+
+    sb.table("workout_plans").delete().eq("id", plan_id).execute()
 
 
 @router.post("/plans/{plan_id}/workouts", status_code=status.HTTP_201_CREATED)
@@ -201,6 +227,7 @@ async def add_workout_to_plan(
         "weekday": body.weekday,
         "sequence_position": body.sequence_position,
         "estimated_duration_min": body.estimated_duration_min,
+        "notes": body.notes,
     }).execute()
 
     return workout.data[0]
@@ -232,6 +259,10 @@ async def add_exercise(
         "reps_max": body.reps_max,
         "order_index": body.order_index,
         "demo_url": body.demo_url,
+        "rest_seconds": body.rest_seconds,
+        "warmup_type": body.warmup_type,
+        "warmup_sets": body.warmup_sets,
+        "warmup_reps": body.warmup_reps,
     }).execute()
 
     return exercise.data[0]

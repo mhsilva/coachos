@@ -25,6 +25,7 @@ interface WorkoutDetail {
     name: string
     format: 'structured' | 'freeform'
     content: string | null
+    notes: string | null
     estimated_duration_min: number | null
     exercises: Exercise[]
   }
@@ -288,6 +289,14 @@ export default function StudentToday() {
             </button>
           )}
         </div>
+
+        {/* Workout notes */}
+        {selected?.workout.notes && (
+          <div className="bg-teal/[0.04] rounded-card border border-teal/[0.06] px-4 py-3 mb-4">
+            <p className="text-xs font-medium text-teal/40 uppercase tracking-wide mb-1">Observações do coach</p>
+            <p className="text-sm text-teal/70 leading-relaxed">{selected.workout.notes}</p>
+          </div>
+        )}
 
         {/* Freeform content */}
         {selected?.workout.format === 'freeform' && selected.workout.content && (

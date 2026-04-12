@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { SetBubble, type SetStatus } from './SetBubble'
 import { LogInput } from './LogInput'
+import { RestTimerModal } from './RestTimerModal'
 
 export interface Exercise {
   id: string
@@ -10,6 +11,10 @@ export interface Exercise {
   reps_max: number | null
   order_index: number
   demo_url: string | null
+  rest_seconds: number | null
+  warmup_type: 'aquecimento' | 'reconhecimento' | null
+  warmup_sets: number | null
+  warmup_reps: number | null
 }
 
 interface SetState {
@@ -29,6 +34,11 @@ interface Props {
   onComplete: (exerciseId: string) => void
 }
 
+const WARMUP_LABEL: Record<string, string> = {
+  aquecimento: 'Aquecimento',
+  reconhecimento: 'Reconhecimento',
+}
+
 export function ExerciseCard({ exercise, onLogSet, onComplete }: Props) {
   const [sets, setSets] = useState<SetState[]>(
     Array.from({ length: exercise.sets }, (_, i) => ({
@@ -39,11 +49,14 @@ export function ExerciseCard({ exercise, onLogSet, onComplete }: Props) {
   )
   const [activeIdx, setActiveIdx] = useState(0)
   const [logging, setLogging] = useState(false)
+  const [showTimer, setShowTimer] = useState(false)
 
   const allDone = sets.every(s => s.status === 'done')
   const repsLabel = exercise.reps_max
     ? `${exercise.reps_min}–${exercise.reps_max} reps`
     : `${exercise.reps_min} reps`
+
+  const hasWarmup = !!exercise.warmup_type
 
   function activateSet(idx: number) {
     if (sets[idx].status === 'done') return
@@ -74,8 +87,11 @@ export function ExerciseCard({ exercise, onLogSet, onComplete }: Props) {
         if (nextActiveIdx < next.length) {
           next[nextActiveIdx] = { ...next[nextActiveIdx], status: 'active' }
           setActiveIdx(nextActiveIdx)
+          // Show rest timer if configured and not last set
+          if (exercise.rest_seconds && exercise.rest_seconds > 0) {
+            setShowTimer(true)
+          }
         } else {
-          // All sets done
           setTimeout(() => onComplete(exercise.id), 0)
         }
         return next
@@ -86,76 +102,99 @@ export function ExerciseCard({ exercise, onLogSet, onComplete }: Props) {
   }
 
   return (
-    <div
-      className={`bg-white rounded-card border p-4 transition-all ${
-        allDone
-          ? 'border-teal/[0.06] opacity-60'
-          : 'border-teal/[0.09] shadow-card'
-      }`}
-    >
-      {/* Header */}
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <h3 className="font-syne font-bold text-base text-teal">{exercise.name}</h3>
-          <p className="text-xs text-teal/50 mt-0.5">
-            {exercise.sets} séries · {repsLabel}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          {allDone && (
-            <span className="text-xs font-medium text-teal bg-teal/10 px-2 py-0.5 rounded-full">
-              Concluído
-            </span>
-          )}
-          {exercise.demo_url && (
-            <a
-              href={exercise.demo_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-copper hover:underline"
-            >
-              Demo
-            </a>
-          )}
-        </div>
-      </div>
-
-      {/* Set bubbles */}
-      <div className="flex gap-2 mt-3 flex-wrap">
-        {sets.map((s, i) => (
-          <SetBubble
-            key={i}
-            setNumber={i + 1}
-            status={s.status}
-            onClick={() => activateSet(i)}
-          />
-        ))}
-      </div>
-
-      {/* Log input — only shown when there's an active set */}
-      {!allDone && sets[activeIdx]?.status === 'active' && (
-        <LogInput
-          weight={sets[activeIdx].weight}
-          reps={sets[activeIdx].reps}
-          onWeightChange={v =>
-            setSets(prev => {
-              const next = [...prev]
-              next[activeIdx] = { ...next[activeIdx], weight: v }
-              return next
-            })
-          }
-          onRepsChange={v =>
-            setSets(prev => {
-              const next = [...prev]
-              next[activeIdx] = { ...next[activeIdx], reps: v }
-              return next
-            })
-          }
-          onConfirm={handleConfirm}
-          loading={logging}
+    <>
+      {showTimer && exercise.rest_seconds && (
+        <RestTimerModal
+          seconds={exercise.rest_seconds}
+          onClose={() => setShowTimer(false)}
         />
       )}
-    </div>
+
+      <div
+        className={`bg-white rounded-card border p-4 transition-all ${
+          allDone
+            ? 'border-teal/[0.06] opacity-60'
+            : 'border-teal/[0.09] shadow-card'
+        }`}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h3 className="font-syne font-bold text-base text-teal">{exercise.name}</h3>
+            <p className="text-xs text-teal/50 mt-0.5">
+              {exercise.sets} séries · {repsLabel}
+              {exercise.rest_seconds ? ` · ${exercise.rest_seconds}s descanso` : ''}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {allDone && (
+              <span className="text-xs font-medium text-teal bg-teal/10 px-2 py-0.5 rounded-full">
+                Concluído
+              </span>
+            )}
+            {exercise.demo_url && (
+              <a
+                href={exercise.demo_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-copper hover:underline"
+              >
+                Demo
+              </a>
+            )}
+          </div>
+        </div>
+
+        {/* Warmup block */}
+        {hasWarmup && (
+          <div className="mt-3 flex items-center gap-2 bg-teal/[0.04] rounded-lg px-3 py-2">
+            <span className="text-xs font-medium text-teal/60 uppercase tracking-wide">
+              {WARMUP_LABEL[exercise.warmup_type!]}
+            </span>
+            <span className="text-teal/20">·</span>
+            <span className="text-xs font-jetbrains text-teal/60">
+              {exercise.warmup_sets}×{exercise.warmup_reps} reps
+            </span>
+          </div>
+        )}
+
+        {/* Set bubbles */}
+        <div className="flex gap-2 mt-3 flex-wrap">
+          {sets.map((s, i) => (
+            <SetBubble
+              key={i}
+              setNumber={i + 1}
+              status={s.status}
+              onClick={() => activateSet(i)}
+            />
+          ))}
+        </div>
+
+        {/* Log input — only shown when there's an active set */}
+        {!allDone && sets[activeIdx]?.status === 'active' && (
+          <LogInput
+            weight={sets[activeIdx].weight}
+            reps={sets[activeIdx].reps}
+            onWeightChange={v =>
+              setSets(prev => {
+                const next = [...prev]
+                next[activeIdx] = { ...next[activeIdx], weight: v }
+                return next
+              })
+            }
+            onRepsChange={v =>
+              setSets(prev => {
+                const next = [...prev]
+                next[activeIdx] = { ...next[activeIdx], reps: v }
+                return next
+              })
+            }
+            onConfirm={handleConfirm}
+            loading={logging}
+          />
+        )}
+      </div>
+    </>
   )
 }

@@ -12,6 +12,10 @@ interface Exercise {
   reps_max: number | null
   order_index: number
   demo_url: string | null
+  rest_seconds: number | null
+  warmup_type: 'aquecimento' | 'reconhecimento' | null
+  warmup_sets: number | null
+  warmup_reps: number | null
 }
 
 interface Workout {
@@ -22,6 +26,7 @@ interface Workout {
   weekday: number | null
   sequence_position: number | null
   estimated_duration_min: number | null
+  notes: string | null
   exercises: Exercise[]
 }
 
@@ -29,24 +34,29 @@ interface Plan {
   id: string
   name: string
   schedule_type: 'fixed_days' | 'sequence'
+  notes: string | null
   workouts: Workout[]
 }
 
 type Phase = 'create' | 'build'
 
 const WEEKDAYS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
+const WARMUP_TYPES = [
+  { value: 'aquecimento', label: 'Aquecimento' },
+  { value: 'reconhecimento', label: 'Reconhecimento' },
+] as const
 
 export default function PlanBuilder() {
   const { id: studentId } = useParams<{ id: string }>()
   const { session } = useAuth()
 
-  // Phase
   const [phase, setPhase] = useState<Phase>('create')
   const [plan, setPlan] = useState<Plan | null>(null)
 
   // Create plan form
   const [planName, setPlanName] = useState('')
   const [scheduleType, setScheduleType] = useState<'fixed_days' | 'sequence'>('sequence')
+  const [planNotes, setPlanNotes] = useState('')
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
 
@@ -58,6 +68,7 @@ export default function PlanBuilder() {
   const [workoutContent, setWorkoutContent] = useState('')
   const [workoutWeekday, setWorkoutWeekday] = useState(0)
   const [workoutDuration, setWorkoutDuration] = useState('')
+  const [workoutNotes, setWorkoutNotes] = useState('')
   const [savingWorkout, setSavingWorkout] = useState(false)
   const [workoutError, setWorkoutError] = useState('')
 
@@ -67,7 +78,12 @@ export default function PlanBuilder() {
   const [exSets, setExSets] = useState('')
   const [exRepsMin, setExRepsMin] = useState('')
   const [exRepsMax, setExRepsMax] = useState('')
+  const [exRest, setExRest] = useState('')
   const [exDemoUrl, setExDemoUrl] = useState('')
+  const [exWarmupEnabled, setExWarmupEnabled] = useState(false)
+  const [exWarmupType, setExWarmupType] = useState<'aquecimento' | 'reconhecimento'>('aquecimento')
+  const [exWarmupSets, setExWarmupSets] = useState('')
+  const [exWarmupReps, setExWarmupReps] = useState('')
   const [savingExercise, setSavingExercise] = useState(false)
   const [exerciseError, setExerciseError] = useState('')
 
@@ -84,6 +100,7 @@ export default function PlanBuilder() {
         student_id: studentId,
         name: planName,
         schedule_type: scheduleType,
+        notes: planNotes || null,
       })
       setPlan({ ...data, workouts: [] })
       setPhase('build')
@@ -109,6 +126,7 @@ export default function PlanBuilder() {
         weekday: scheduleType === 'fixed_days' ? workoutWeekday : null,
         sequence_position: scheduleType === 'sequence' ? nextPosition : null,
         estimated_duration_min: workoutDuration ? parseInt(workoutDuration, 10) : null,
+        notes: workoutNotes || null,
       })
       const workout = { ...data, exercises: data.exercises ?? [] }
       setPlan(prev => prev ? { ...prev, workouts: [...prev.workouts, workout] } : prev)
@@ -116,6 +134,7 @@ export default function PlanBuilder() {
       setWorkoutFormat('structured')
       setWorkoutContent('')
       setWorkoutDuration('')
+      setWorkoutNotes('')
       setAddingWorkout(false)
       setExpandedWorkoutId(workout.id)
     } catch (err) {
@@ -131,7 +150,12 @@ export default function PlanBuilder() {
     setExSets('')
     setExRepsMin('')
     setExRepsMax('')
+    setExRest('')
     setExDemoUrl('')
+    setExWarmupEnabled(false)
+    setExWarmupType('aquecimento')
+    setExWarmupSets('')
+    setExWarmupReps('')
     setExerciseError('')
   }
 
@@ -152,6 +176,10 @@ export default function PlanBuilder() {
         reps_max: exRepsMax ? parseInt(exRepsMax, 10) : null,
         order_index: orderIndex,
         demo_url: exDemoUrl || null,
+        rest_seconds: exRest ? parseInt(exRest, 10) : null,
+        warmup_type: exWarmupEnabled ? exWarmupType : null,
+        warmup_sets: exWarmupEnabled && exWarmupSets ? parseInt(exWarmupSets, 10) : null,
+        warmup_reps: exWarmupEnabled && exWarmupReps ? parseInt(exWarmupReps, 10) : null,
       })
       setPlan(prev => {
         if (!prev) return prev
@@ -232,6 +260,19 @@ export default function PlanBuilder() {
               </p>
             </div>
 
+            <div>
+              <label className="block text-sm text-teal/60 mb-1.5">
+                Observações da ficha <span className="text-teal/30">(opcional)</span>
+              </label>
+              <textarea
+                value={planNotes}
+                onChange={e => setPlanNotes(e.target.value)}
+                rows={3}
+                placeholder="Orientações gerais para o aluno sobre esta ficha..."
+                className="w-full border border-teal/[0.15] rounded-btn px-3 py-2.5 text-sm text-teal placeholder:text-teal/25 focus:outline-none focus:border-copper transition-colors resize-none"
+              />
+            </div>
+
             {createError && <p className="text-sm text-red-500">{createError}</p>}
 
             <button
@@ -264,6 +305,11 @@ export default function PlanBuilder() {
           <span className="text-xs font-medium bg-teal/10 text-teal px-2 py-0.5 rounded-full">
             {plan?.schedule_type === 'sequence' ? 'Sequencial' : 'Dias fixos'}
           </span>
+          {plan?.notes && (
+            <p className="mt-2 text-sm text-teal/60 bg-teal/[0.04] rounded-lg px-3 py-2 leading-relaxed">
+              {plan.notes}
+            </p>
+          )}
         </div>
 
         {/* Workout cards */}
@@ -317,6 +363,13 @@ export default function PlanBuilder() {
                 {/* Expanded content */}
                 {isExpanded && (
                   <div className="border-t border-teal/[0.06] px-4 pb-4">
+                    {/* Workout notes */}
+                    {workout.notes && (
+                      <div className="mt-3 bg-teal/[0.04] rounded-lg px-3 py-2">
+                        <p className="text-xs text-teal/60 leading-relaxed">{workout.notes}</p>
+                      </div>
+                    )}
+
                     {/* Freeform content */}
                     {workout.format === 'freeform' && workout.content && (
                       <div className="mt-3 prose prose-sm max-w-none text-teal/70 whitespace-pre-wrap text-sm leading-relaxed">
@@ -328,13 +381,19 @@ export default function PlanBuilder() {
                     {workout.format !== 'freeform' && workout.exercises.length > 0 && (
                       <div className="mt-3 space-y-2">
                         {workout.exercises.map(ex => (
-                          <div key={ex.id} className="flex items-center gap-3 py-1.5">
-                            <span className="text-xs font-jetbrains text-teal/30 w-5 shrink-0">{ex.order_index}</span>
+                          <div key={ex.id} className="flex items-start gap-3 py-1.5">
+                            <span className="text-xs font-jetbrains text-teal/30 w-5 shrink-0 mt-0.5">{ex.order_index}</span>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm text-teal truncate">{ex.name}</p>
                               <p className="text-xs text-teal/40">
                                 {ex.sets} séries · {ex.reps_min}{ex.reps_max ? `–${ex.reps_max}` : ''} reps
+                                {ex.rest_seconds ? ` · ${ex.rest_seconds}s` : ''}
                               </p>
+                              {ex.warmup_type && (
+                                <p className="text-xs text-teal/30 mt-0.5">
+                                  {ex.warmup_type === 'aquecimento' ? 'Aquec.' : 'Reconh.'}: {ex.warmup_sets}×{ex.warmup_reps}
+                                </p>
+                              )}
                             </div>
                             {ex.demo_url && (
                               <a href={ex.demo_url} target="_blank" rel="noopener noreferrer" className="text-xs text-copper hover:underline shrink-0">
@@ -357,8 +416,8 @@ export default function PlanBuilder() {
                           placeholder="Nome do exercício"
                           className="w-full border border-teal/[0.15] rounded-btn px-3 py-2 text-sm text-teal placeholder:text-teal/25 focus:outline-none focus:border-copper transition-colors"
                         />
-                        <div className="flex gap-2">
-                          <div className="flex-1">
+                        <div className="grid grid-cols-3 gap-2">
+                          <div>
                             <label className="block text-xs text-teal/40 mb-1">Séries</label>
                             <input
                               type="number"
@@ -371,7 +430,7 @@ export default function PlanBuilder() {
                               className="w-full border border-teal/[0.15] rounded-btn px-3 py-2 text-sm text-teal placeholder:text-teal/25 focus:outline-none focus:border-copper transition-colors font-jetbrains"
                             />
                           </div>
-                          <div className="flex-1">
+                          <div>
                             <label className="block text-xs text-teal/40 mb-1">Reps mín</label>
                             <input
                               type="number"
@@ -384,7 +443,7 @@ export default function PlanBuilder() {
                               className="w-full border border-teal/[0.15] rounded-btn px-3 py-2 text-sm text-teal placeholder:text-teal/25 focus:outline-none focus:border-copper transition-colors font-jetbrains"
                             />
                           </div>
-                          <div className="flex-1">
+                          <div>
                             <label className="block text-xs text-teal/40 mb-1">Reps máx</label>
                             <input
                               type="number"
@@ -397,6 +456,20 @@ export default function PlanBuilder() {
                             />
                           </div>
                         </div>
+
+                        <div>
+                          <label className="block text-xs text-teal/40 mb-1">Descanso entre séries (segundos)</label>
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            value={exRest}
+                            onChange={e => setExRest(e.target.value)}
+                            min={0}
+                            placeholder="60"
+                            className="w-full border border-teal/[0.15] rounded-btn px-3 py-2 text-sm text-teal placeholder:text-teal/25 focus:outline-none focus:border-copper transition-colors font-jetbrains"
+                          />
+                        </div>
+
                         <input
                           type="url"
                           value={exDemoUrl}
@@ -404,6 +477,69 @@ export default function PlanBuilder() {
                           placeholder="Link de demonstração (opcional)"
                           className="w-full border border-teal/[0.15] rounded-btn px-3 py-2 text-sm text-teal placeholder:text-teal/25 focus:outline-none focus:border-copper transition-colors"
                         />
+
+                        {/* Warmup block toggle */}
+                        <div>
+                          <button
+                            type="button"
+                            onClick={() => setExWarmupEnabled(v => !v)}
+                            className={`text-xs font-medium transition-colors ${
+                              exWarmupEnabled ? 'text-copper' : 'text-teal/40 hover:text-teal/60'
+                            }`}
+                          >
+                            {exWarmupEnabled ? '− Remover bloco de aquecimento' : '+ Adicionar bloco de aquecimento'}
+                          </button>
+
+                          {exWarmupEnabled && (
+                            <div className="mt-2 p-3 bg-teal/[0.04] rounded-lg space-y-2">
+                              <div className="flex gap-2">
+                                {WARMUP_TYPES.map(wt => (
+                                  <button
+                                    key={wt.value}
+                                    type="button"
+                                    onClick={() => setExWarmupType(wt.value)}
+                                    className={`flex-1 rounded-btn py-1.5 text-xs font-medium transition-all ${
+                                      exWarmupType === wt.value
+                                        ? 'bg-teal text-white'
+                                        : 'border border-teal/[0.15] text-teal/60'
+                                    }`}
+                                  >
+                                    {wt.label}
+                                  </button>
+                                ))}
+                              </div>
+                              <div className="flex gap-2">
+                                <div className="flex-1">
+                                  <label className="block text-xs text-teal/40 mb-1">Séries</label>
+                                  <input
+                                    type="number"
+                                    inputMode="numeric"
+                                    value={exWarmupSets}
+                                    onChange={e => setExWarmupSets(e.target.value)}
+                                    required={exWarmupEnabled}
+                                    min={1}
+                                    placeholder="2"
+                                    className="w-full border border-teal/[0.15] rounded-btn px-3 py-2 text-sm text-teal placeholder:text-teal/25 focus:outline-none focus:border-copper transition-colors font-jetbrains"
+                                  />
+                                </div>
+                                <div className="flex-1">
+                                  <label className="block text-xs text-teal/40 mb-1">Reps</label>
+                                  <input
+                                    type="number"
+                                    inputMode="numeric"
+                                    value={exWarmupReps}
+                                    onChange={e => setExWarmupReps(e.target.value)}
+                                    required={exWarmupEnabled}
+                                    min={1}
+                                    placeholder="10"
+                                    className="w-full border border-teal/[0.15] rounded-btn px-3 py-2 text-sm text-teal placeholder:text-teal/25 focus:outline-none focus:border-copper transition-colors font-jetbrains"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
                         {exerciseError && <p className="text-xs text-red-500">{exerciseError}</p>}
                         <div className="flex gap-2">
                           <button
@@ -525,6 +661,20 @@ export default function PlanBuilder() {
                 />
               </div>
             </div>
+
+            <div>
+              <label className="block text-xs text-teal/40 mb-1">
+                Observações do treino <span className="text-teal/25">(opcional)</span>
+              </label>
+              <textarea
+                value={workoutNotes}
+                onChange={e => setWorkoutNotes(e.target.value)}
+                rows={2}
+                placeholder="Dicas ou orientações específicas para este treino..."
+                className="w-full border border-teal/[0.15] rounded-btn px-3 py-2.5 text-sm text-teal placeholder:text-teal/25 focus:outline-none focus:border-copper transition-colors resize-none"
+              />
+            </div>
+
             {workoutError && <p className="text-xs text-red-500">{workoutError}</p>}
             <div className="flex gap-2">
               <button

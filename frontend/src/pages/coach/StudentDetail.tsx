@@ -54,6 +54,7 @@ interface PlanSummary {
   id: string
   name: string
   schedule_type: string
+  notes: string | null
   workouts: PlanWorkout[]
   created_at: string
 }
@@ -97,6 +98,8 @@ export default function CoachStudentDetail() {
   const [plans, setPlans] = useState<PlanSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedExercise, setSelectedExercise] = useState<string>('')
+  const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   const fetchData = useCallback(() => {
     if (!session?.access_token || !id) return
@@ -117,6 +120,20 @@ export default function CoachStudentDetail() {
   }, [session, id])
 
   useEffect(fetchData, [fetchData])
+
+  async function handleDeletePlan(planId: string) {
+    if (!session?.access_token) return
+    setDeletingPlanId(planId)
+    try {
+      await createApi(session.access_token).delete(`/workouts/plans/${planId}`)
+      setPlans(prev => prev.filter(p => p.id !== planId))
+      setConfirmDeleteId(null)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setDeletingPlanId(null)
+    }
+  }
 
   const progression = useMemo(
     () => (data ? buildProgressionData(data.sessions) : {}),
@@ -190,15 +207,17 @@ export default function CoachStudentDetail() {
                 <div className="space-y-2">
                   {plans.map(plan => {
                     const totalExercises = plan.workouts.reduce((acc, w) => acc + (w.exercises?.length ?? 0), 0)
+                    const isConfirming = confirmDeleteId === plan.id
+                    const isDeleting = deletingPlanId === plan.id
                     return (
                       <div
                         key={plan.id}
                         className="bg-white rounded-card border border-teal/[0.09] shadow-card p-4"
                       >
                         <div className="flex items-start justify-between gap-2">
-                          <div>
+                          <div className="flex-1 min-w-0">
                             <p className="font-syne font-bold text-teal">{plan.name}</p>
-                            <div className="flex items-center gap-2 mt-1">
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
                               <span className="text-xs font-medium bg-teal/10 text-teal px-2 py-0.5 rounded-full">
                                 {plan.schedule_type === 'sequence' ? 'Sequencial' : 'Dias fixos'}
                               </span>
@@ -206,6 +225,43 @@ export default function CoachStudentDetail() {
                                 {plan.workouts.length} treino{plan.workouts.length !== 1 ? 's' : ''} · {totalExercises} exercício{totalExercises !== 1 ? 's' : ''}
                               </span>
                             </div>
+                            {plan.notes && (
+                              <p className="mt-2 text-xs text-teal/50 leading-relaxed">{plan.notes}</p>
+                            )}
+                          </div>
+
+                          {/* Delete action */}
+                          <div className="shrink-0">
+                            {isConfirming ? (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeleteId(null)}
+                                  className="text-xs text-teal/40 hover:text-teal transition-colors"
+                                >
+                                  Cancelar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeletePlan(plan.id)}
+                                  disabled={isDeleting}
+                                  className="text-xs font-medium text-red-500 hover:text-red-600 transition-colors disabled:opacity-40"
+                                >
+                                  {isDeleting ? 'Removendo...' : 'Confirmar'}
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteId(plan.id)}
+                                className="text-teal/20 hover:text-red-400 transition-colors p-1"
+                                aria-label="Remover ficha"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                                  <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clipRule="evenodd" />
+                                </svg>
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>

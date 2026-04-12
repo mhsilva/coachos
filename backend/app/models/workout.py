@@ -11,6 +11,10 @@ class ExerciseCreate(BaseModel):
     reps_max: int | None = None
     order_index: int
     demo_url: str | None = None
+    rest_seconds: int | None = None
+    warmup_type: Literal["aquecimento", "reconhecimento"] | None = None
+    warmup_sets: int | None = None
+    warmup_reps: int | None = None
 
 
 class WorkoutCreate(BaseModel):
@@ -20,12 +24,14 @@ class WorkoutCreate(BaseModel):
     weekday: int | None = None           # 0=Mon … 6=Sun; None when schedule=sequence
     sequence_position: int | None = None # None when schedule=fixed_days
     estimated_duration_min: int | None = None
+    notes: str | None = None
 
 
 class WorkoutPlanCreate(BaseModel):
     student_id: UUID
     name: str
     schedule_type: Literal["fixed_days", "sequence"]
+    notes: str | None = None
 
 
 class ExerciseOut(ExerciseCreate):
