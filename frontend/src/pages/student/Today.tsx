@@ -40,7 +40,7 @@ function formatDate(iso: string): string {
 
 export default function StudentToday() {
   const { session } = useAuth()
-  const { startSession, logSet, finishSession, loading: sessionLoading } = useWorkoutSession()
+  const { sessionId, startSession, logSet, finishSession, loading: sessionLoading } = useWorkoutSession()
 
   const [screen, setScreen] = useState<Screen>('loading')
   const [workouts, setWorkouts] = useState<WorkoutSummary[]>([])
@@ -275,17 +275,24 @@ export default function StudentToday() {
             )}
           </div>
 
-          {!sessionLoading && (
+          {sessionId ? (
+            <span className="mt-4 inline-flex items-center gap-1.5 text-sm text-white/70">
+              <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+              Treino iniciado
+            </span>
+          ) : (
             <button
               type="button"
               onClick={handleStartSession}
+              disabled={sessionLoading}
               className="
                 mt-4 bg-copper text-white rounded-btn px-4 py-2
                 text-sm font-medium shadow-btn
                 hover:opacity-90 active:scale-95 transition-all
+                disabled:opacity-40
               "
             >
-              Iniciar treino
+              {sessionLoading ? 'Iniciando...' : 'Iniciar treino'}
             </button>
           )}
         </div>
