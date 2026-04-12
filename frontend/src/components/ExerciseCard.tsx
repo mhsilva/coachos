@@ -17,6 +17,13 @@ export interface Exercise {
   warmup_reps: number | null
 }
 
+export interface LastSetLog {
+  exercise_id: string
+  set_number: number
+  weight_kg: number | null
+  reps_done: number | null
+}
+
 interface SetState {
   status: SetStatus
   weight: string
@@ -25,6 +32,7 @@ interface SetState {
 
 interface Props {
   exercise: Exercise
+  lastLogs?: LastSetLog[]
   onLogSet: (
     exerciseId: string,
     setNumber: number,
@@ -39,14 +47,19 @@ const WARMUP_LABEL: Record<string, string> = {
   reconhecimento: 'Reconhecimento',
 }
 
-export function ExerciseCard({ exercise, onLogSet, onComplete }: Props) {
-  const [sets, setSets] = useState<SetState[]>(
-    Array.from({ length: exercise.sets }, (_, i) => ({
+function buildInitialSets(exercise: Exercise, lastLogs?: LastSetLog[]): SetState[] {
+  return Array.from({ length: exercise.sets }, (_, i) => {
+    const log = lastLogs?.find(l => l.exercise_id === exercise.id && l.set_number === i + 1)
+    return {
       status: (i === 0 ? 'active' : 'pending') as SetStatus,
-      weight: '',
-      reps: '',
-    })),
-  )
+      weight: log?.weight_kg != null ? String(log.weight_kg) : '',
+      reps: log?.reps_done != null ? String(log.reps_done) : '',
+    }
+  })
+}
+
+export function ExerciseCard({ exercise, lastLogs, onLogSet, onComplete }: Props) {
+  const [sets, setSets] = useState<SetState[]>(() => buildInitialSets(exercise, lastLogs))
   const [activeIdx, setActiveIdx] = useState(0)
   const [logging, setLogging] = useState(false)
   const [showTimer, setShowTimer] = useState(false)
@@ -57,6 +70,7 @@ export function ExerciseCard({ exercise, onLogSet, onComplete }: Props) {
     : `${exercise.reps_min} reps`
 
   const hasWarmup = !!exercise.warmup_type
+  const hasHistory = lastLogs && lastLogs.some(l => l.exercise_id === exercise.id)
 
   function activateSet(idx: number) {
     if (sets[idx].status === 'done') return
@@ -85,9 +99,15 @@ export function ExerciseCard({ exercise, onLogSet, onComplete }: Props) {
         next[activeIdx] = { ...next[activeIdx], status: 'done' }
         const nextActiveIdx = activeIdx + 1
         if (nextActiveIdx < next.length) {
-          next[nextActiveIdx] = { ...next[nextActiveIdx], status: 'active' }
+          // Carry over weight/reps from current set if next set is empty
+          const nextSet = next[nextActiveIdx]
+          next[nextActiveIdx] = {
+            ...nextSet,
+            status: 'active',
+            weight: nextSet.weight || current.weight,
+            reps: nextSet.reps || current.reps,
+          }
           setActiveIdx(nextActiveIdx)
-          // Show rest timer if configured and not last set
           if (exercise.rest_seconds && exercise.rest_seconds > 0) {
             setShowTimer(true)
           }
@@ -125,6 +145,9 @@ export function ExerciseCard({ exercise, onLogSet, onComplete }: Props) {
               {exercise.sets} séries · {repsLabel}
               {exercise.rest_seconds ? ` · ${exercise.rest_seconds}s descanso` : ''}
             </p>
+            {hasHistory && !allDone && (
+              <p className="text-xs text-copper/60 mt-0.5">Valores do último treino</p>
+            )}
           </div>
 
           <div className="flex items-center gap-2 shrink-0">

@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { AppLayout } from '../../components/AppLayout'
-import { ExerciseCard, type Exercise } from '../../components/ExerciseCard'
+import { ExerciseCard, type Exercise, type LastSetLog } from '../../components/ExerciseCard'
 import { useAuth } from '../../hooks/useAuth'
 import { useWorkoutSession } from '../../hooks/useSession'
 import { createApi } from '../../lib/api'
@@ -46,6 +46,7 @@ export default function StudentToday() {
   const [workouts, setWorkouts] = useState<WorkoutSummary[]>([])
   const [selected, setSelected] = useState<WorkoutDetail | null>(null)
   const [completedExercises, setCompletedExercises] = useState<Set<string>>(new Set())
+  const [lastLogs, setLastLogs] = useState<LastSetLog[]>([])
   const [finishing, setFinishing] = useState(false)
   const [error, setError] = useState('')
 
@@ -63,9 +64,13 @@ export default function StudentToday() {
   async function handleSelectWorkout(workoutId: string) {
     if (!session?.access_token) return
     try {
-      const detail = await createApi(session.access_token)
-        .get<WorkoutDetail>(`/workouts/mine/${workoutId}`)
+      const api = createApi(session.access_token)
+      const [detail, logs] = await Promise.all([
+        api.get<WorkoutDetail>(`/workouts/mine/${workoutId}`),
+        api.get<LastSetLog[]>(`/sessions/last-logs/${workoutId}`),
+      ])
       setSelected(detail)
+      setLastLogs(logs)
       setCompletedExercises(new Set())
       setError('')
       setScreen('executing')
@@ -321,6 +326,7 @@ export default function StudentToday() {
               <ExerciseCard
                 key={ex.id}
                 exercise={ex}
+                lastLogs={lastLogs}
                 onLogSet={handleLogSet}
                 onComplete={handleExerciseComplete}
               />

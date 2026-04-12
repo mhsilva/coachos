@@ -33,6 +33,40 @@ async def get_my_sessions(user: dict = Depends(require_role("student"))) -> list
     return sessions.data
 
 
+@router.get("/last-logs/{workout_id}")
+async def get_last_logs(
+    workout_id: str,
+    user: dict = Depends(require_role("student")),
+) -> list:
+    """Return set_logs from the student's most recent finished session for this workout."""
+    sb = get_supabase()
+    student_id = _get_student_id(sb, user["sub"])
+
+    # Find the most recent finished session
+    last_session = (
+        sb.table("workout_sessions")
+        .select("id")
+        .eq("student_id", student_id)
+        .eq("workout_id", workout_id)
+        .not_.is_("finished_at", "null")
+        .order("finished_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if not last_session.data:
+        return []
+
+    logs = (
+        sb.table("set_logs")
+        .select("exercise_id, set_number, weight_kg, reps_done")
+        .eq("session_id", last_session.data[0]["id"])
+        .order("set_number")
+        .execute()
+    )
+
+    return logs.data
+
+
 @router.post("/start", status_code=status.HTTP_201_CREATED)
 async def start_session(
     body: SessionStart,
