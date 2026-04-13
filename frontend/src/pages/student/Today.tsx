@@ -31,6 +31,17 @@ interface PlanGroup {
   workouts: WorkoutEntry[]
 }
 
+interface CoachInfo {
+  full_name: string | null
+  avatar_url: string | null
+  bio: string | null
+}
+
+interface WorkoutsMineResponse {
+  coach: CoachInfo | null
+  plan_groups: PlanGroup[]
+}
+
 interface WorkoutDetail {
   plan: PlanInfo
   workout: {
@@ -56,11 +67,46 @@ function formatPlanDate(iso: string): string {
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
+function CoachCard({ coach }: { coach: CoachInfo }) {
+  const name = coach.full_name ?? 'Seu coach'
+  const initials = name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(p => p[0])
+    .join('')
+    .toUpperCase()
+
+  return (
+    <div className="bg-white rounded-card border border-teal/[0.09] shadow-card p-4 flex items-start gap-3">
+      {coach.avatar_url ? (
+        <img
+          src={coach.avatar_url}
+          alt={name}
+          className="w-12 h-12 rounded-full object-cover shrink-0"
+        />
+      ) : (
+        <div className="w-12 h-12 rounded-full bg-teal text-white font-syne font-bold text-sm flex items-center justify-center shrink-0">
+          {initials || 'C'}
+        </div>
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-medium text-copper uppercase tracking-wide">Seu coach</p>
+        <p className="font-syne font-bold text-teal text-sm leading-tight mt-0.5 truncate">{name}</p>
+        {coach.bio && (
+          <p className="text-xs text-teal/55 leading-relaxed mt-1 line-clamp-2">{coach.bio}</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function StudentToday() {
   const { session } = useAuth()
   const { sessionId, startSession, logSet, finishSession, loading: sessionLoading } = useWorkoutSession()
 
   const [screen, setScreen] = useState<Screen>('loading')
+  const [coach, setCoach] = useState<CoachInfo | null>(null)
   const [planGroups, setPlanGroups] = useState<PlanGroup[]>([])
   const [selected, setSelected] = useState<WorkoutDetail | null>(null)
   const [completedExercises, setCompletedExercises] = useState<Set<string>>(new Set())
@@ -71,10 +117,11 @@ export default function StudentToday() {
   useEffect(() => {
     if (!session?.access_token) return
     createApi(session.access_token)
-      .get<PlanGroup[]>('/workouts/mine')
+      .get<WorkoutsMineResponse>('/workouts/mine')
       .then(data => {
-        setPlanGroups(data)
-        const hasAny = data.some(g => g.workouts.length > 0)
+        setCoach(data.coach)
+        setPlanGroups(data.plan_groups)
+        const hasAny = data.plan_groups.some(g => g.workouts.length > 0)
         setScreen(hasAny ? 'list' : 'empty')
       })
       .catch(() => setScreen('empty'))
@@ -141,10 +188,11 @@ export default function StudentToday() {
     setError('')
     if (!session?.access_token) return
     createApi(session.access_token)
-      .get<PlanGroup[]>('/workouts/mine')
+      .get<WorkoutsMineResponse>('/workouts/mine')
       .then(data => {
-        setPlanGroups(data)
-        const hasAny = data.some(g => g.workouts.length > 0)
+        setCoach(data.coach)
+        setPlanGroups(data.plan_groups)
+        const hasAny = data.plan_groups.some(g => g.workouts.length > 0)
         setScreen(hasAny ? 'list' : 'empty')
       })
       .catch(() => setScreen('list'))
@@ -172,9 +220,10 @@ export default function StudentToday() {
   if (screen === 'empty') {
     return (
       <AppLayout>
-        <div className="px-4 py-8 md:px-8">
-          <h1 className="page-title mb-2">Meus Treinos</h1>
-          <div className="mt-12 text-center">
+        <div className="px-4 py-8 md:px-8 max-w-lg">
+          <h1 className="page-title mb-6">Meus Treinos</h1>
+          {coach && <CoachCard coach={coach} />}
+          <div className="mt-10 text-center">
             <p className="text-4xl mb-3">📋</p>
             <p className="font-syne font-bold text-teal text-lg">Nenhum treino disponível</p>
             <p className="text-sm text-teal/50 mt-1">
@@ -191,69 +240,81 @@ export default function StudentToday() {
       <AppLayout>
         <div className="px-4 py-8 md:px-8 max-w-lg">
           <h1 className="page-title mb-1">Meus Treinos</h1>
-          <p className="text-sm text-teal/50 mb-6">Escolha qual treino executar</p>
+          <p className="text-sm text-teal/50 mb-5">Escolha qual treino executar</p>
+
+          {coach && <CoachCard coach={coach} />}
 
           {error && <p className="text-sm text-red-500 mb-3">{error}</p>}
 
-          <div className="space-y-5">
+          <div className="space-y-4 mt-5">
             {planGroups.map(group => (
-              <div key={group.plan.id}>
-                {/* Plan box header */}
-                <div className="bg-teal rounded-card px-4 py-3 mb-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="font-syne font-bold text-white text-base leading-tight">
-                      {group.plan.name}
-                    </p>
-                    {(group.plan.start_date || group.plan.end_date) && (
-                      <p className="text-xs text-white/50 shrink-0 text-right">
-                        {group.plan.start_date && formatPlanDate(group.plan.start_date)}
-                        {group.plan.start_date && group.plan.end_date && ' – '}
-                        {group.plan.end_date && formatPlanDate(group.plan.end_date)}
+              <div
+                key={group.plan.id}
+                className="bg-white rounded-card border border-teal/[0.09] shadow-card overflow-hidden"
+              >
+                {/* Plan header */}
+                <div className="px-4 py-3 border-b border-teal/[0.07] bg-teal/[0.03] flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="w-1 h-4 rounded-full bg-copper shrink-0" />
+                      <p className="font-syne font-bold text-teal text-base leading-tight truncate">
+                        {group.plan.name}
+                      </p>
+                    </div>
+                    {group.plan.notes && (
+                      <p className="text-xs text-teal/55 mt-1.5 leading-relaxed pl-3">
+                        {group.plan.notes}
                       </p>
                     )}
                   </div>
-                  {group.plan.notes && (
-                    <p className="text-xs text-white/60 mt-1.5 leading-relaxed">
-                      {group.plan.notes}
+                  {(group.plan.start_date || group.plan.end_date) && (
+                    <p className="text-[10px] font-jetbrains text-teal/45 shrink-0 text-right leading-tight">
+                      {group.plan.start_date && formatPlanDate(group.plan.start_date)}
+                      {group.plan.start_date && group.plan.end_date && <><br />até<br /></>}
+                      {group.plan.end_date && formatPlanDate(group.plan.end_date)}
                     </p>
                   )}
                 </div>
 
-                {/* Workout cards inside the plan */}
+                {/* Workouts as rows inside the card */}
                 {group.workouts.length === 0 ? (
-                  <p className="text-xs text-teal/40 px-1 py-2">Nenhum treino nesta ficha.</p>
+                  <p className="text-xs text-teal/40 px-4 py-4">Nenhum treino nesta ficha.</p>
                 ) : (
-                  <div className="space-y-2 pl-1">
+                  <div className="divide-y divide-teal/[0.06]">
                     {group.workouts.map(w => (
                       <button
                         key={w.workout.id}
                         type="button"
                         onClick={() => handleSelectWorkout(w.workout.id)}
                         className="
-                          w-full text-left bg-white rounded-card border border-teal/[0.09]
-                          shadow-card p-4 hover:border-copper/40 active:scale-[0.99]
-                          transition-all
+                          w-full text-left px-4 py-3.5 flex items-center justify-between gap-3
+                          hover:bg-copper/[0.04] active:bg-copper/[0.08]
+                          transition-colors
                         "
                       >
-                        <p className="font-syne font-bold text-teal">{w.workout.name}</p>
-
-                        <div className="flex items-center gap-3 mt-1.5 text-xs text-teal/50 flex-wrap">
-                          <span className="font-jetbrains">
-                            {w.times_executed}x executado{w.times_executed !== 1 ? 's' : ''}
-                          </span>
-                          {w.last_executed_at && (
-                            <>
-                              <span className="text-teal/20">·</span>
-                              <span>Último: {formatDate(w.last_executed_at)}</span>
-                            </>
-                          )}
-                          {w.workout.estimated_duration_min && (
-                            <>
-                              <span className="text-teal/20">·</span>
-                              <span>~{w.workout.estimated_duration_min} min</span>
-                            </>
-                          )}
+                        <div className="min-w-0">
+                          <p className="font-syne font-bold text-teal truncate">{w.workout.name}</p>
+                          <div className="flex items-center gap-2 mt-1 text-xs text-teal/50 flex-wrap">
+                            <span className="font-jetbrains">
+                              {w.times_executed}x
+                            </span>
+                            {w.last_executed_at && (
+                              <>
+                                <span className="text-teal/20">·</span>
+                                <span>Último: {formatDate(w.last_executed_at)}</span>
+                              </>
+                            )}
+                            {w.workout.estimated_duration_min && (
+                              <>
+                                <span className="text-teal/20">·</span>
+                                <span>~{w.workout.estimated_duration_min} min</span>
+                              </>
+                            )}
+                          </div>
                         </div>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-teal/25 shrink-0">
+                          <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
+                        </svg>
                       </button>
                     ))}
                   </div>

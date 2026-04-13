@@ -11,14 +11,31 @@ router = APIRouter()
 
 
 @router.get("/mine")
-async def get_my_workouts(user: dict = Depends(require_role("student"))) -> list:
-    """Return all workout plans (with workouts) for the student, grouped by plan, with execution stats."""
+async def get_my_workouts(user: dict = Depends(require_role("student"))) -> dict:
+    """Return coach info + all workout plans (with workouts) for the student, grouped by plan."""
     sb = get_supabase()
 
-    student = sb.table("students").select("id").eq("user_id", user["sub"]).execute()
-    if not student.data:
+    student_res = (
+        sb.table("students")
+        .select("id, coach_id, coaches(bio, profiles(full_name, avatar_url))")
+        .eq("user_id", user["sub"])
+        .execute()
+    )
+    if not student_res.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Aluno não encontrado")
-    student_id = student.data[0]["id"]
+
+    student = student_res.data[0]
+    student_id = student["id"]
+
+    coach_info = None
+    coach_data = student.get("coaches")
+    if coach_data:
+        coach_profile = coach_data.get("profiles") or {}
+        coach_info = {
+            "full_name": coach_profile.get("full_name"),
+            "avatar_url": coach_profile.get("avatar_url"),
+            "bio": coach_data.get("bio"),
+        }
 
     plans = (
         sb.table("workout_plans")
@@ -28,7 +45,7 @@ async def get_my_workouts(user: dict = Depends(require_role("student"))) -> list
         .execute()
     )
     if not plans.data:
-        return []
+        return {"coach": coach_info, "plan_groups": []}
 
     # Collect all workout ids to batch-fetch session stats
     all_workout_ids: list[str] = []
@@ -37,20 +54,23 @@ async def get_my_workouts(user: dict = Depends(require_role("student"))) -> list
             all_workout_ids.append(workout["id"])
 
     if not all_workout_ids:
-        return [
-            {
-                "plan": {
-                    "id": p["id"],
-                    "name": p["name"],
-                    "notes": p.get("notes"),
-                    "start_date": p.get("start_date"),
-                    "end_date": p.get("end_date"),
-                    "schedule_type": p.get("schedule_type"),
-                },
-                "workouts": [],
-            }
-            for p in plans.data
-        ]
+        return {
+            "coach": coach_info,
+            "plan_groups": [
+                {
+                    "plan": {
+                        "id": p["id"],
+                        "name": p["name"],
+                        "notes": p.get("notes"),
+                        "start_date": p.get("start_date"),
+                        "end_date": p.get("end_date"),
+                        "schedule_type": p.get("schedule_type"),
+                    },
+                    "workouts": [],
+                }
+                for p in plans.data
+            ],
+        }
 
     # Fetch all finished sessions for these workouts
     sessions = (
@@ -100,7 +120,7 @@ async def get_my_workouts(user: dict = Depends(require_role("student"))) -> list
             "workouts": workouts_out,
         })
 
-    return result
+    return {"coach": coach_info, "plan_groups": result}
 
 
 @router.get("/mine/{workout_id}")
