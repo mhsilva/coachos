@@ -16,6 +16,19 @@ interface RecentLoad {
   logged_at: string
   exercises: { name: string } | null
   set_number: number
+  workout_sessions: {
+    student_id: string
+    students: { profiles: { full_name: string | null } | null } | null
+  } | null
+}
+
+interface SessionDoneToday {
+  id: string
+  started_at: string
+  finished_at: string
+  workout_name: string | null
+  workouts: { name: string } | null
+  students: { profiles: { full_name: string | null } | null } | null
 }
 
 interface DashboardData {
@@ -23,6 +36,7 @@ interface DashboardData {
   sessions_today: number
   students: Student[]
   recent_loads: RecentLoad[]
+  sessions_done_today: SessionDoneToday[]
 }
 
 function timeAgo(iso: string) {
@@ -32,6 +46,10 @@ function timeAgo(iso: string) {
   const hours = Math.floor(mins / 60)
   if (hours < 24) return `${hours}h atrás`
   return `${Math.floor(hours / 24)}d atrás`
+}
+
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 }
 
 export default function CoachDashboard() {
@@ -66,7 +84,7 @@ export default function CoachDashboard() {
                 value={data?.active_students ?? 0}
               />
               <KpiCard
-                label="Sessões hoje"
+                label="Treinos hoje"
                 value={data?.sessions_today ?? 0}
                 accent
               />
@@ -81,51 +99,93 @@ export default function CoachDashboard() {
               />
             </div>
 
-            {/* Recent load updates */}
-            <div>
-              <h2 className="font-syne font-bold text-lg text-teal mb-3">
-                Atualizações recentes
-              </h2>
+            {/* Two-panel grid on desktop, stacked on mobile */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-              {!data?.recent_loads.length ? (
-                <p className="text-sm text-teal/50 py-4">
-                  Nenhuma carga registrada recentemente.
-                </p>
-              ) : (
-                <div className="bg-white rounded-card border border-teal/[0.09] shadow-card overflow-hidden">
-                  {/* Table — scrollable on mobile */}
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-teal/[0.07]">
-                          <th className="text-left px-4 py-3 text-xs font-medium text-teal/50">Exercício</th>
-                          <th className="text-right px-4 py-3 text-xs font-medium text-teal/50">Carga</th>
-                          <th className="text-right px-4 py-3 text-xs font-medium text-teal/50">Reps</th>
-                          <th className="text-right px-4 py-3 text-xs font-medium text-teal/50 hidden sm:table-cell">Quando</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {data.recent_loads.map(log => (
-                          <tr key={log.id} className="border-b border-teal/[0.05] last:border-0">
-                            <td className="px-4 py-3 text-teal font-medium">
-                              {log.exercises?.name ?? '—'}
-                            </td>
-                            <td className="px-4 py-3 text-right font-jetbrains text-teal">
-                              {log.weight_kg} kg
-                            </td>
-                            <td className="px-4 py-3 text-right font-jetbrains text-teal/60">
-                              {log.reps_done ?? '—'}
-                            </td>
-                            <td className="px-4 py-3 text-right text-xs text-teal/40 hidden sm:table-cell">
-                              {timeAgo(log.logged_at)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+              {/* Panel 1: Treinos feitos hoje */}
+              <div>
+                <h2 className="font-syne font-bold text-lg text-teal mb-3">
+                  Treinos de hoje
+                </h2>
+
+                {!data?.sessions_done_today.length ? (
+                  <p className="text-sm text-teal/50 py-4">
+                    Nenhum treino finalizado hoje.
+                  </p>
+                ) : (
+                  <div className="bg-white rounded-card border border-teal/[0.09] shadow-card divide-y divide-teal/[0.05]">
+                    {data.sessions_done_today.map(s => {
+                      const studentName = s.students?.profiles?.full_name ?? 'Aluno'
+                      const workoutName = s.workout_name ?? s.workouts?.name ?? '—'
+                      return (
+                        <div key={s.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-teal truncate">{studentName}</p>
+                            <p className="text-xs text-teal/40 truncate">{workoutName}</p>
+                          </div>
+                          <span className="text-xs font-jetbrains text-teal/40 shrink-0">
+                            {formatTime(s.finished_at)}
+                          </span>
+                        </div>
+                      )
+                    })}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
+
+              {/* Panel 2: Atualizações recentes de carga */}
+              <div>
+                <h2 className="font-syne font-bold text-lg text-teal mb-3">
+                  Atualizações recentes
+                </h2>
+
+                {!data?.recent_loads.length ? (
+                  <p className="text-sm text-teal/50 py-4">
+                    Nenhuma carga registrada recentemente.
+                  </p>
+                ) : (
+                  <div className="bg-white rounded-card border border-teal/[0.09] shadow-card overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-teal/[0.07]">
+                            <th className="text-left px-4 py-3 text-xs font-medium text-teal/50">Aluno</th>
+                            <th className="text-left px-4 py-3 text-xs font-medium text-teal/50">Exercício</th>
+                            <th className="text-right px-4 py-3 text-xs font-medium text-teal/50">Carga</th>
+                            <th className="text-right px-4 py-3 text-xs font-medium text-teal/50 hidden sm:table-cell">Quando</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.recent_loads.map(log => {
+                            const studentName =
+                              log.workout_sessions?.students?.profiles?.full_name ?? '—'
+                            return (
+                              <tr key={log.id} className="border-b border-teal/[0.05] last:border-0">
+                                <td className="px-4 py-3 text-teal/60 text-xs max-w-[80px] truncate">
+                                  {studentName}
+                                </td>
+                                <td className="px-4 py-3 text-teal font-medium text-xs truncate max-w-[120px]">
+                                  {log.exercises?.name ?? '—'}
+                                </td>
+                                <td className="px-4 py-3 text-right font-jetbrains text-teal text-xs whitespace-nowrap">
+                                  {log.weight_kg} kg
+                                  {log.reps_done != null && (
+                                    <span className="text-teal/40 ml-1">× {log.reps_done}</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-right text-xs text-teal/40 hidden sm:table-cell">
+                                  {timeAgo(log.logged_at)}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+
             </div>
           </>
         )}

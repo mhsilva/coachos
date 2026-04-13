@@ -26,26 +26,36 @@ async def coach_dashboard(user: dict = Depends(require_role("coach"))) -> dict:
     active_students = len(students.data)
 
     sessions_today = 0
+    sessions_done_today: list = []
     recent_loads: list = []
 
     if student_ids:
         today_str = date.today().isoformat()
-        today_sessions = (
+
+        # Sessions finished today with student name + workout name
+        today_done = (
             sb.table("workout_sessions")
-            .select("id")
+            .select(
+                "id, started_at, finished_at, workout_name,"
+                "workouts(name),"
+                "students!inner(profiles(full_name))"
+            )
             .in_("student_id", student_ids)
             .gte("started_at", today_str)
+            .not_.is_("finished_at", "null")
+            .order("finished_at", desc=True)
             .execute()
         )
-        sessions_today = len(today_sessions.data)
+        sessions_today = len(today_done.data)
+        sessions_done_today = today_done.data
 
-        # Recent set logs joined with exercise name and student info
+        # Recent set logs with exercise name and student name
         recent = (
             sb.table("set_logs")
             .select(
                 "id, weight_kg, reps_done, logged_at, set_number,"
                 "exercises(name),"
-                "workout_sessions!inner(student_id, workout_sessions_students:students(profiles(full_name)))"
+                "workout_sessions!inner(student_id, students!inner(profiles(full_name)))"
             )
             .in_("workout_sessions.student_id", student_ids)
             .not_.is_("weight_kg", "null")
@@ -60,6 +70,7 @@ async def coach_dashboard(user: dict = Depends(require_role("coach"))) -> dict:
         "sessions_today": sessions_today,
         "students": students.data,
         "recent_loads": recent_loads,
+        "sessions_done_today": sessions_done_today,
     }
 
 

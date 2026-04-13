@@ -38,6 +38,9 @@ create table if not exists workout_plans (
   student_id    uuid references students(id) on delete cascade,
   name          text not null,
   schedule_type text not null check (schedule_type in ('fixed_days', 'sequence')),
+  notes         text,
+  start_date    date,
+  end_date      date,
   created_at    timestamptz default now()
 );
 
@@ -50,19 +53,25 @@ create table if not exists workouts (
   weekday                int check (weekday between 0 and 6),
   sequence_position      int,
   estimated_duration_min int,
+  notes                  text,
   created_at             timestamptz default now()
 );
 
 create table if not exists exercises (
-  id          uuid primary key default gen_random_uuid(),
-  workout_id  uuid references workouts(id) on delete cascade,
-  name        text not null,
-  sets        int not null,
-  reps_min    int not null,
-  reps_max    int,
-  order_index int not null,
-  demo_url    text,
-  created_at  timestamptz default now()
+  id           uuid primary key default gen_random_uuid(),
+  workout_id   uuid references workouts(id) on delete cascade,
+  name         text not null,
+  sets         int not null,
+  reps_min     int not null,
+  reps_max     int,
+  order_index  int not null,
+  demo_url     text,
+  rest_seconds int,
+  warmup_type  text check (warmup_type in ('aquecimento', 'reconhecimento')),
+  warmup_sets  int,
+  warmup_reps  int,
+  notes        text,
+  created_at   timestamptz default now()
 );
 
 create table if not exists workout_sessions (

@@ -15,6 +15,7 @@ export interface Exercise {
   warmup_type: 'aquecimento' | 'reconhecimento' | null
   warmup_sets: number | null
   warmup_reps: number | null
+  notes: string | null
 }
 
 export interface LastSetLog {
@@ -168,6 +169,13 @@ export function ExerciseCard({ exercise, lastLogs, onLogSet, onComplete }: Props
             )}
           </div>
         </div>
+
+        {/* Exercise notes */}
+        {exercise.notes && (
+          <div className="mt-2 bg-teal/[0.04] rounded-lg px-3 py-2">
+            <p className="text-xs text-teal/55 leading-relaxed">{exercise.notes}</p>
+          </div>
+        )}
 
         {/* Warmup block */}
         {hasWarmup && (

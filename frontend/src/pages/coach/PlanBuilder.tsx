@@ -16,6 +16,7 @@ interface Exercise {
   warmup_type: 'aquecimento' | 'reconhecimento' | null
   warmup_sets: number | null
   warmup_reps: number | null
+  notes: string | null
 }
 
 interface Workout {
@@ -35,6 +36,8 @@ interface Plan {
   name: string
   schedule_type: 'fixed_days' | 'sequence'
   notes: string | null
+  start_date: string | null
+  end_date: string | null
   workouts: Workout[]
 }
 
@@ -59,6 +62,8 @@ export default function PlanBuilder() {
   const [planName, setPlanName] = useState('')
   const [scheduleType, setScheduleType] = useState<'fixed_days' | 'sequence'>('sequence')
   const [planNotes, setPlanNotes] = useState('')
+  const [planStartDate, setPlanStartDate] = useState('')
+  const [planEndDate, setPlanEndDate] = useState('')
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
 
@@ -89,11 +94,17 @@ export default function PlanBuilder() {
   const [savingExercise, setSavingExercise] = useState(false)
   const [exerciseError, setExerciseError] = useState('')
 
+  // Exercise notes
+  const [exNotes, setExNotes] = useState('')
+
   // Inline editing
   const [editingPlanName, setEditingPlanName] = useState(false)
   const [editPlanNameVal, setEditPlanNameVal] = useState('')
   const [editingPlanNotes, setEditingPlanNotes] = useState(false)
   const [editPlanNotesVal, setEditPlanNotesVal] = useState('')
+  const [editingPlanDates, setEditingPlanDates] = useState(false)
+  const [editPlanStartDate, setEditPlanStartDate] = useState('')
+  const [editPlanEndDate, setEditPlanEndDate] = useState('')
   const [editingWorkoutId, setEditingWorkoutId] = useState<string | null>(null)
   const [editWorkoutNameVal, setEditWorkoutNameVal] = useState('')
   const [editWorkoutNotesVal, setEditWorkoutNotesVal] = useState('')
@@ -132,6 +143,8 @@ export default function PlanBuilder() {
         name: planName,
         schedule_type: scheduleType,
         notes: planNotes || null,
+        start_date: planStartDate || null,
+        end_date: planEndDate || null,
       })
       setPlan({ ...data, workouts: [] })
       setPhase('build')
@@ -158,6 +171,22 @@ export default function PlanBuilder() {
       await api.patch(`/workouts/plans/${plan.id}`, { notes: editPlanNotesVal || null })
       setPlan(prev => prev ? { ...prev, notes: editPlanNotesVal || null } : prev)
       setEditingPlanNotes(false)
+    } catch { /* ignore */ }
+  }
+
+  async function handleSavePlanDates() {
+    if (!api || !plan) return
+    try {
+      await api.patch(`/workouts/plans/${plan.id}`, {
+        start_date: editPlanStartDate || null,
+        end_date: editPlanEndDate || null,
+      })
+      setPlan(prev => prev ? {
+        ...prev,
+        start_date: editPlanStartDate || null,
+        end_date: editPlanEndDate || null,
+      } : prev)
+      setEditingPlanDates(false)
     } catch { /* ignore */ }
   }
 
@@ -258,6 +287,7 @@ export default function PlanBuilder() {
     setExWarmupType('aquecimento')
     setExWarmupSets('')
     setExWarmupReps('')
+    setExNotes('')
     setExerciseError('')
   }
 
@@ -282,6 +312,7 @@ export default function PlanBuilder() {
         warmup_type: exWarmupEnabled ? exWarmupType : null,
         warmup_sets: exWarmupEnabled && exWarmupSets ? parseInt(exWarmupSets, 10) : null,
         warmup_reps: exWarmupEnabled && exWarmupReps ? parseInt(exWarmupReps, 10) : null,
+        notes: exNotes || null,
       })
       setPlan(prev => {
         if (!prev) return prev
@@ -373,6 +404,31 @@ export default function PlanBuilder() {
               </p>
             </div>
 
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm text-teal/60 mb-1.5">
+                  Início <span className="text-teal/30">(opcional)</span>
+                </label>
+                <input
+                  type="date"
+                  value={planStartDate}
+                  onChange={e => setPlanStartDate(e.target.value)}
+                  className="w-full border border-teal/[0.15] rounded-btn px-3 py-2.5 text-sm text-teal focus:outline-none focus:border-copper transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-teal/60 mb-1.5">
+                  Fim <span className="text-teal/30">(opcional)</span>
+                </label>
+                <input
+                  type="date"
+                  value={planEndDate}
+                  onChange={e => setPlanEndDate(e.target.value)}
+                  className="w-full border border-teal/[0.15] rounded-btn px-3 py-2.5 text-sm text-teal focus:outline-none focus:border-copper transition-colors"
+                />
+              </div>
+            </div>
+
             <div>
               <label className="block text-sm text-teal/60 mb-1.5">
                 Observações da ficha <span className="text-teal/30">(opcional)</span>
@@ -441,6 +497,55 @@ export default function PlanBuilder() {
           <span className="text-xs font-medium bg-teal/10 text-teal px-2 py-0.5 rounded-full">
             {schedType === 'sequence' ? 'Sequencial' : 'Dias fixos'}
           </span>
+
+          {/* Plan dates — editable */}
+          {editingPlanDates ? (
+            <div className="mt-2 flex flex-wrap gap-2 items-end">
+              <div>
+                <label className="block text-xs text-teal/40 mb-1">Início</label>
+                <input
+                  type="date"
+                  value={editPlanStartDate}
+                  onChange={e => setEditPlanStartDate(e.target.value)}
+                  autoFocus
+                  className="border border-copper rounded-btn px-2 py-1 text-xs text-teal focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-teal/40 mb-1">Fim</label>
+                <input
+                  type="date"
+                  value={editPlanEndDate}
+                  onChange={e => setEditPlanEndDate(e.target.value)}
+                  className="border border-copper rounded-btn px-2 py-1 text-xs text-teal focus:outline-none"
+                />
+              </div>
+              <div className="flex gap-2 items-center pb-0.5">
+                <button type="button" onClick={handleSavePlanDates} className="text-xs text-copper font-medium">Salvar</button>
+                <button type="button" onClick={() => setEditingPlanDates(false)} className="text-xs text-teal/40">Cancelar</button>
+              </div>
+            </div>
+          ) : (
+            <div
+              className="mt-1.5 cursor-pointer group inline-block"
+              onClick={() => {
+                setEditPlanStartDate(plan?.start_date ?? '')
+                setEditPlanEndDate(plan?.end_date ?? '')
+                setEditingPlanDates(true)
+              }}
+              title="Clique para editar datas"
+            >
+              {plan?.start_date || plan?.end_date ? (
+                <p className="text-xs text-teal/50 bg-teal/[0.04] rounded px-2 py-1 group-hover:border-copper/30 border border-transparent transition-colors">
+                  {plan.start_date && new Date(plan.start_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  {plan.start_date && plan.end_date && ' – '}
+                  {plan.end_date && new Date(plan.end_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </p>
+              ) : (
+                <p className="text-xs text-teal/30 hover:text-copper transition-colors">+ Adicionar período da ficha</p>
+              )}
+            </div>
+          )}
 
           {/* Plan notes — editable */}
           {editingPlanNotes ? (
@@ -620,6 +725,9 @@ export default function PlanBuilder() {
                                   {ex.warmup_type === 'aquecimento' ? 'Aquec.' : 'Reconh.'}: {ex.warmup_sets}×{ex.warmup_reps}
                                 </p>
                               )}
+                              {ex.notes && (
+                                <p className="text-xs text-teal/50 italic mt-0.5 truncate">{ex.notes}</p>
+                              )}
                             </div>
                             <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                               {ex.demo_url && (
@@ -701,6 +809,13 @@ export default function PlanBuilder() {
                           type="url" value={exDemoUrl} onChange={e => setExDemoUrl(e.target.value)}
                           placeholder="Link de demonstração (opcional)"
                           className="w-full border border-teal/[0.15] rounded-btn px-3 py-2 text-sm text-teal placeholder:text-teal/25 focus:outline-none focus:border-copper transition-colors"
+                        />
+
+                        <textarea
+                          value={exNotes} onChange={e => setExNotes(e.target.value)}
+                          rows={2}
+                          placeholder="Observações do movimento (opcional) — ex: manter coluna neutra"
+                          className="w-full border border-teal/[0.15] rounded-btn px-3 py-2 text-sm text-teal placeholder:text-teal/25 focus:outline-none focus:border-copper transition-colors resize-none"
                         />
 
                         {/* Warmup block toggle */}

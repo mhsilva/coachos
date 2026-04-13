@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, date
 from typing import Literal
 
 
@@ -15,6 +15,7 @@ class ExerciseCreate(BaseModel):
     warmup_type: Literal["aquecimento", "reconhecimento"] | None = None
     warmup_sets: int | None = None
     warmup_reps: int | None = None
+    notes: str | None = None
 
 
 class WorkoutCreate(BaseModel):
@@ -32,11 +33,15 @@ class WorkoutPlanCreate(BaseModel):
     name: str
     schedule_type: Literal["fixed_days", "sequence"]
     notes: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
 
 
 class WorkoutPlanUpdate(BaseModel):
     name: str | None = None
     notes: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
 
 
 class WorkoutUpdate(BaseModel):
@@ -59,6 +64,7 @@ class ExerciseUpdate(BaseModel):
     warmup_type: Literal["aquecimento", "reconhecimento"] | None = None
     warmup_sets: int | None = None
     warmup_reps: int | None = None
+    notes: str | None = None
 
 
 class ExerciseOut(ExerciseCreate):
@@ -84,5 +90,8 @@ class WorkoutPlanOut(BaseModel):
     student_id: UUID
     name: str
     schedule_type: str
+    notes: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
     workouts: list[WorkoutOut] = []
     created_at: datetime

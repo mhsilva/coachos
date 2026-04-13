@@ -12,7 +12,7 @@ router = APIRouter()
 
 @router.get("/mine")
 async def get_my_workouts(user: dict = Depends(require_role("student"))) -> list:
-    """Return all workouts for the student with execution stats."""
+    """Return all workout plans (with workouts) for the student, grouped by plan, with execution stats."""
     sb = get_supabase()
 
     student = sb.table("students").select("id").eq("user_id", user["sub"]).execute()
@@ -20,27 +20,44 @@ async def get_my_workouts(user: dict = Depends(require_role("student"))) -> list
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Aluno não encontrado")
     student_id = student.data[0]["id"]
 
-    plans = sb.table("workout_plans").select("*, workouts(*)").eq("student_id", student_id).execute()
+    plans = (
+        sb.table("workout_plans")
+        .select("id, name, notes, start_date, end_date, schedule_type, workouts(*)")
+        .eq("student_id", student_id)
+        .order("created_at", desc=True)
+        .execute()
+    )
     if not plans.data:
         return []
 
     # Collect all workout ids to batch-fetch session stats
-    all_workouts: list[dict] = []
+    all_workout_ids: list[str] = []
     for plan in plans.data:
         for workout in plan.get("workouts") or []:
-            all_workouts.append({"plan_name": plan["name"], **workout})
+            all_workout_ids.append(workout["id"])
 
-    if not all_workouts:
-        return []
-
-    workout_ids = [w["id"] for w in all_workouts]
+    if not all_workout_ids:
+        return [
+            {
+                "plan": {
+                    "id": p["id"],
+                    "name": p["name"],
+                    "notes": p.get("notes"),
+                    "start_date": p.get("start_date"),
+                    "end_date": p.get("end_date"),
+                    "schedule_type": p.get("schedule_type"),
+                },
+                "workouts": [],
+            }
+            for p in plans.data
+        ]
 
     # Fetch all finished sessions for these workouts
     sessions = (
         sb.table("workout_sessions")
         .select("workout_id, finished_at")
         .eq("student_id", student_id)
-        .in_("workout_id", workout_ids)
+        .in_("workout_id", all_workout_ids)
         .not_.is_("finished_at", "null")
         .order("finished_at", desc=True)
         .execute()
@@ -55,20 +72,32 @@ async def get_my_workouts(user: dict = Depends(require_role("student"))) -> list
         stats[wid]["times_executed"] += 1
 
     result = []
-    for w in all_workouts:
-        wid = w["id"]
-        ws = stats.get(wid, {"times_executed": 0, "last_executed_at": None})
+    for plan in plans.data:
+        workouts_out = []
+        for w in plan.get("workouts") or []:
+            wid = w["id"]
+            ws = stats.get(wid, {"times_executed": 0, "last_executed_at": None})
+            workouts_out.append({
+                "workout": {
+                    "id": w["id"],
+                    "name": w["name"],
+                    "weekday": w.get("weekday"),
+                    "sequence_position": w.get("sequence_position"),
+                    "estimated_duration_min": w.get("estimated_duration_min"),
+                },
+                "times_executed": ws["times_executed"],
+                "last_executed_at": ws["last_executed_at"],
+            })
         result.append({
-            "plan": w["plan_name"],
-            "workout": {
-                "id": w["id"],
-                "name": w["name"],
-                "weekday": w.get("weekday"),
-                "sequence_position": w.get("sequence_position"),
-                "estimated_duration_min": w.get("estimated_duration_min"),
+            "plan": {
+                "id": plan["id"],
+                "name": plan["name"],
+                "notes": plan.get("notes"),
+                "start_date": plan.get("start_date"),
+                "end_date": plan.get("end_date"),
+                "schedule_type": plan.get("schedule_type"),
             },
-            "times_executed": ws["times_executed"],
-            "last_executed_at": ws["last_executed_at"],
+            "workouts": workouts_out,
         })
 
     return result
@@ -89,7 +118,7 @@ async def get_workout_detail(
     # Verify the workout belongs to this student via plan
     workout = (
         sb.table("workouts")
-        .select("*, workout_plans!inner(student_id, name)")
+        .select("*, workout_plans!inner(id, student_id, name, notes, start_date, end_date)")
         .eq("id", workout_id)
         .execute()
     )
@@ -110,7 +139,13 @@ async def get_workout_detail(
 
     w = workout.data[0]
     return {
-        "plan": plan_data.get("name", ""),
+        "plan": {
+            "id": plan_data.get("id", ""),
+            "name": plan_data.get("name", ""),
+            "notes": plan_data.get("notes"),
+            "start_date": plan_data.get("start_date"),
+            "end_date": plan_data.get("end_date"),
+        },
         "workout": {
             "id": w["id"],
             "name": w["name"],
@@ -203,6 +238,8 @@ async def create_plan(
         "name": body.name,
         "schedule_type": body.schedule_type,
         "notes": body.notes,
+        "start_date": body.start_date.isoformat() if body.start_date else None,
+        "end_date": body.end_date.isoformat() if body.end_date else None,
     }).execute()
 
     return plan.data[0]
@@ -416,6 +453,7 @@ async def add_exercise(
         "warmup_type": body.warmup_type,
         "warmup_sets": body.warmup_sets,
         "warmup_reps": body.warmup_reps,
+        "notes": body.notes,
     }).execute()
 
     return exercise.data[0]

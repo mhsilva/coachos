@@ -5,8 +5,16 @@ import { useAuth } from '../../hooks/useAuth'
 import { useWorkoutSession } from '../../hooks/useSession'
 import { createApi } from '../../lib/api'
 
-interface WorkoutSummary {
-  plan: string
+interface PlanInfo {
+  id: string
+  name: string
+  notes: string | null
+  start_date: string | null
+  end_date: string | null
+  schedule_type: 'fixed_days' | 'sequence'
+}
+
+interface WorkoutEntry {
   workout: {
     id: string
     name: string
@@ -18,8 +26,13 @@ interface WorkoutSummary {
   last_executed_at: string | null
 }
 
+interface PlanGroup {
+  plan: PlanInfo
+  workouts: WorkoutEntry[]
+}
+
 interface WorkoutDetail {
-  plan: string
+  plan: PlanInfo
   workout: {
     id: string
     name: string
@@ -38,12 +51,17 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
 }
 
+function formatPlanDate(iso: string): string {
+  const d = new Date(iso + 'T12:00:00') // avoid timezone shift
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
 export default function StudentToday() {
   const { session } = useAuth()
   const { sessionId, startSession, logSet, finishSession, loading: sessionLoading } = useWorkoutSession()
 
   const [screen, setScreen] = useState<Screen>('loading')
-  const [workouts, setWorkouts] = useState<WorkoutSummary[]>([])
+  const [planGroups, setPlanGroups] = useState<PlanGroup[]>([])
   const [selected, setSelected] = useState<WorkoutDetail | null>(null)
   const [completedExercises, setCompletedExercises] = useState<Set<string>>(new Set())
   const [lastLogs, setLastLogs] = useState<LastSetLog[]>([])
@@ -53,10 +71,11 @@ export default function StudentToday() {
   useEffect(() => {
     if (!session?.access_token) return
     createApi(session.access_token)
-      .get<WorkoutSummary[]>('/workouts/mine')
+      .get<PlanGroup[]>('/workouts/mine')
       .then(data => {
-        setWorkouts(data)
-        setScreen(data.length === 0 ? 'empty' : 'list')
+        setPlanGroups(data)
+        const hasAny = data.some(g => g.workouts.length > 0)
+        setScreen(hasAny ? 'list' : 'empty')
       })
       .catch(() => setScreen('empty'))
   }, [session])
@@ -120,13 +139,13 @@ export default function StudentToday() {
     setSelected(null)
     setCompletedExercises(new Set())
     setError('')
-    // Refetch to update stats
     if (!session?.access_token) return
     createApi(session.access_token)
-      .get<WorkoutSummary[]>('/workouts/mine')
+      .get<PlanGroup[]>('/workouts/mine')
       .then(data => {
-        setWorkouts(data)
-        setScreen(data.length === 0 ? 'empty' : 'list')
+        setPlanGroups(data)
+        const hasAny = data.some(g => g.workouts.length > 0)
+        setScreen(hasAny ? 'list' : 'empty')
       })
       .catch(() => setScreen('list'))
   }
@@ -176,39 +195,70 @@ export default function StudentToday() {
 
           {error && <p className="text-sm text-red-500 mb-3">{error}</p>}
 
-          <div className="space-y-3">
-            {workouts.map(w => (
-              <button
-                key={w.workout.id}
-                type="button"
-                onClick={() => handleSelectWorkout(w.workout.id)}
-                className="
-                  w-full text-left bg-white rounded-card border border-teal/[0.09]
-                  shadow-card p-5 hover:border-copper/40 active:scale-[0.99]
-                  transition-all
-                "
-              >
-                <p className="text-xs text-teal/40 mb-0.5">{w.plan}</p>
-                <p className="font-syne font-bold text-teal text-lg">{w.workout.name}</p>
-
-                <div className="flex items-center gap-3 mt-2 text-sm text-teal/50">
-                  <span className="font-jetbrains">
-                    {w.times_executed}x executado{w.times_executed !== 1 ? 's' : ''}
-                  </span>
-                  {w.last_executed_at && (
-                    <>
-                      <span className="text-teal/20">·</span>
-                      <span>Último: {formatDate(w.last_executed_at)}</span>
-                    </>
-                  )}
-                  {w.workout.estimated_duration_min && (
-                    <>
-                      <span className="text-teal/20">·</span>
-                      <span>~{w.workout.estimated_duration_min} min</span>
-                    </>
+          <div className="space-y-5">
+            {planGroups.map(group => (
+              <div key={group.plan.id}>
+                {/* Plan box header */}
+                <div className="bg-teal rounded-card px-4 py-3 mb-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-syne font-bold text-white text-base leading-tight">
+                      {group.plan.name}
+                    </p>
+                    {(group.plan.start_date || group.plan.end_date) && (
+                      <p className="text-xs text-white/50 shrink-0 text-right">
+                        {group.plan.start_date && formatPlanDate(group.plan.start_date)}
+                        {group.plan.start_date && group.plan.end_date && ' – '}
+                        {group.plan.end_date && formatPlanDate(group.plan.end_date)}
+                      </p>
+                    )}
+                  </div>
+                  {group.plan.notes && (
+                    <p className="text-xs text-white/60 mt-1.5 leading-relaxed">
+                      {group.plan.notes}
+                    </p>
                   )}
                 </div>
-              </button>
+
+                {/* Workout cards inside the plan */}
+                {group.workouts.length === 0 ? (
+                  <p className="text-xs text-teal/40 px-1 py-2">Nenhum treino nesta ficha.</p>
+                ) : (
+                  <div className="space-y-2 pl-1">
+                    {group.workouts.map(w => (
+                      <button
+                        key={w.workout.id}
+                        type="button"
+                        onClick={() => handleSelectWorkout(w.workout.id)}
+                        className="
+                          w-full text-left bg-white rounded-card border border-teal/[0.09]
+                          shadow-card p-4 hover:border-copper/40 active:scale-[0.99]
+                          transition-all
+                        "
+                      >
+                        <p className="font-syne font-bold text-teal">{w.workout.name}</p>
+
+                        <div className="flex items-center gap-3 mt-1.5 text-xs text-teal/50 flex-wrap">
+                          <span className="font-jetbrains">
+                            {w.times_executed}x executado{w.times_executed !== 1 ? 's' : ''}
+                          </span>
+                          {w.last_executed_at && (
+                            <>
+                              <span className="text-teal/20">·</span>
+                              <span>Último: {formatDate(w.last_executed_at)}</span>
+                            </>
+                          )}
+                          {w.workout.estimated_duration_min && (
+                            <>
+                              <span className="text-teal/20">·</span>
+                              <span>~{w.workout.estimated_duration_min} min</span>
+                            </>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         </div>
@@ -261,7 +311,14 @@ export default function StudentToday() {
 
         {/* Hero card */}
         <div className="bg-teal rounded-card p-5 mb-6 text-white">
-          <p className="text-xs text-white/50 mb-1">{selected?.plan}</p>
+          <p className="text-xs text-white/50 mb-1">{selected?.plan.name}</p>
+          {(selected?.plan.start_date || selected?.plan.end_date) && (
+            <p className="text-xs text-white/40 mb-1">
+              {selected.plan.start_date && formatPlanDate(selected.plan.start_date)}
+              {selected.plan.start_date && selected.plan.end_date && ' – '}
+              {selected.plan.end_date && formatPlanDate(selected.plan.end_date)}
+            </p>
+          )}
           <h1 className="font-syne font-extrabold text-2xl tracking-[-0.02em]">
             {selected?.workout.name}
           </h1>
@@ -302,10 +359,18 @@ export default function StudentToday() {
           )}
         </div>
 
+        {/* Plan notes */}
+        {selected?.plan.notes && (
+          <div className="bg-teal/[0.04] rounded-card border border-teal/[0.06] px-4 py-3 mb-4">
+            <p className="text-xs font-medium text-teal/40 uppercase tracking-wide mb-1">Observações da ficha</p>
+            <p className="text-sm text-teal/70 leading-relaxed">{selected.plan.notes}</p>
+          </div>
+        )}
+
         {/* Workout notes */}
         {selected?.workout.notes && (
           <div className="bg-teal/[0.04] rounded-card border border-teal/[0.06] px-4 py-3 mb-4">
-            <p className="text-xs font-medium text-teal/40 uppercase tracking-wide mb-1">Observações do coach</p>
+            <p className="text-xs font-medium text-teal/40 uppercase tracking-wide mb-1">Observações do treino</p>
             <p className="text-sm text-teal/70 leading-relaxed">{selected.workout.notes}</p>
           </div>
         )}
