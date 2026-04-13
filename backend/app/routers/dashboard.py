@@ -79,7 +79,13 @@ async def student_detail(
     student_id: str,
     user: dict = Depends(require_role("coach")),
 ) -> dict:
-    """Return full session history and progression data for one student."""
+    """Return session history (light) + progression logs (recent only) for one student.
+
+    Split into two queries to avoid pulling every set_log for every session up-front.
+    - `sessions`: last 20 sessions with sets_count only (for the history list)
+    - `progression_logs`: flat list of (exercise_name, weight_kg, started_at) for
+      the last 15 sessions (enough for a usable chart).
+    """
     sb = get_supabase()
 
     coach = sb.table("coaches").select("id").eq("user_id", user["sub"]).execute()
@@ -97,16 +103,56 @@ async def student_detail(
     if not student.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Aluno não encontrado")
 
-    sessions = (
+    SESSIONS_LIMIT = 20
+    PROGRESSION_SESSIONS = 15
+
+    sessions_result = (
         sb.table("workout_sessions")
-        .select("id, started_at, finished_at, workout_name, workouts(name), set_logs(*, exercises(name))")
+        .select("id, started_at, finished_at, workout_name, workouts(name)")
         .eq("student_id", student_id)
         .order("started_at", desc=True)
-        .limit(50)
+        .limit(SESSIONS_LIMIT)
         .execute()
     )
+    sessions_data: list[dict] = sessions_result.data
+    session_ids = [s["id"] for s in sessions_data]
+
+    # Count set_logs per session (single query, no payload beyond session ids)
+    counts: dict[str, int] = {}
+    if session_ids:
+        count_rows = (
+            sb.table("set_logs")
+            .select("session_id")
+            .in_("session_id", session_ids)
+            .execute()
+        )
+        for row in count_rows.data:
+            counts[row["session_id"]] = counts.get(row["session_id"], 0) + 1
+    for s in sessions_data:
+        s["sets_count"] = counts.get(s["id"], 0)
+
+    # Progression data: last N sessions' weighted logs only
+    progression_sessions = session_ids[:PROGRESSION_SESSIONS]
+    progression_logs: list[dict] = []
+    if progression_sessions:
+        logs = (
+            sb.table("set_logs")
+            .select("session_id, weight_kg, exercises(name)")
+            .in_("session_id", progression_sessions)
+            .not_.is_("weight_kg", "null")
+            .execute()
+        )
+        session_dates = {s["id"]: s["started_at"] for s in sessions_data}
+        for log in logs.data:
+            exercise = log.get("exercises") or {}
+            progression_logs.append({
+                "exercise_name": exercise.get("name"),
+                "weight_kg": log["weight_kg"],
+                "started_at": session_dates.get(log["session_id"]),
+            })
 
     return {
         "student": student.data[0],
-        "sessions": sessions.data,
+        "sessions": sessions_data,
+        "progression_logs": progression_logs,
     }

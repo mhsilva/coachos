@@ -13,20 +13,19 @@ import { AppLayout } from '../../components/AppLayout'
 import { useAuth } from '../../hooks/useAuth'
 import { createApi } from '../../lib/api'
 
-interface SetLog {
-  exercise_id: string
-  weight_kg: number | null
-  reps_done: number | null
-  logged_at: string
-  exercises: { name: string } | null
-}
-
 interface Session {
   id: string
   started_at: string
   finished_at: string | null
   workouts: { name: string } | null
-  set_logs: SetLog[]
+  workout_name: string | null
+  sets_count: number
+}
+
+interface ProgressionLog {
+  exercise_name: string | null
+  weight_kg: number
+  started_at: string | null
 }
 
 interface StudentProfile {
@@ -40,6 +39,7 @@ interface StudentProfile {
 interface DetailData {
   student: StudentProfile
   sessions: Session[]
+  progression_logs: ProgressionLog[]
 }
 
 interface PlanWorkout {
@@ -77,24 +77,37 @@ function formatDuration(start: string, end: string | null) {
   return `${mins} min`
 }
 
-/** Build max-weight-per-date per exercise from session data */
-function buildProgressionData(sessions: Session[]) {
-  const byExercise: Record<string, { date: string; maxWeight: number }[]> = {}
-  const chronological = [...sessions].reverse()
-
-  for (const session of chronological) {
-    const date = formatDateShort(session.started_at)
-    for (const log of session.set_logs) {
-      if (!log.exercises?.name || log.weight_kg === null) continue
-      const name = log.exercises.name
-      if (!byExercise[name]) byExercise[name] = []
-      const existing = byExercise[name].find(d => d.date === date)
-      if (existing) {
-        existing.maxWeight = Math.max(existing.maxWeight, log.weight_kg)
-      } else {
-        byExercise[name].push({ date, maxWeight: log.weight_kg })
+/** Build max-weight-per-date per exercise from the flat progression logs. */
+function buildProgressionData(logs: ProgressionLog[]) {
+  // Group by (exercise, ISO date) and keep the max weight per day.
+  const byKey: Record<string, { started_at: string; maxWeight: number; exercise: string }> = {}
+  for (const log of logs) {
+    if (!log.exercise_name || !log.started_at || log.weight_kg === null) continue
+    const dayIso = log.started_at.slice(0, 10) // YYYY-MM-DD (sortable)
+    const key = `${log.exercise_name}|${dayIso}`
+    const existing = byKey[key]
+    if (existing) {
+      existing.maxWeight = Math.max(existing.maxWeight, log.weight_kg)
+    } else {
+      byKey[key] = {
+        started_at: dayIso,
+        maxWeight: log.weight_kg,
+        exercise: log.exercise_name,
       }
     }
+  }
+
+  // Sort chronologically per exercise and format dates for display.
+  const byExercise: Record<string, { date: string; maxWeight: number }[]> = {}
+  const entries = Object.values(byKey).sort((a, b) =>
+    a.started_at.localeCompare(b.started_at),
+  )
+  for (const entry of entries) {
+    if (!byExercise[entry.exercise]) byExercise[entry.exercise] = []
+    byExercise[entry.exercise].push({
+      date: formatDateShort(entry.started_at),
+      maxWeight: entry.maxWeight,
+    })
   }
   return byExercise
 }
@@ -124,7 +137,7 @@ export default function CoachStudentDetail() {
         setData(detail)
         setPlans(plansData)
         setChats(chatsData)
-        const prog = buildProgressionData(detail.sessions)
+        const prog = buildProgressionData(detail.progression_logs)
         const first = Object.keys(prog)[0] ?? ''
         setSelectedExercise(first)
       })
@@ -166,7 +179,7 @@ export default function CoachStudentDetail() {
   }
 
   const progression = useMemo(
-    () => (data ? buildProgressionData(data.sessions) : {}),
+    () => (data ? buildProgressionData(data.progression_logs) : {}),
     [data],
   )
   const exerciseNames = Object.keys(progression)
@@ -215,77 +228,6 @@ export default function CoachStudentDetail() {
                   {data.sessions.length} sessões registradas
                 </p>
               </div>
-            </div>
-
-            {/* Anamnese */}
-            <div className="mb-8">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="font-syne font-bold text-lg text-teal">Anamnese</h2>
-                {!chats.some(c => c.status === 'open') && (
-                  <button
-                    type="button"
-                    onClick={handleSendAnamnese}
-                    disabled={sendingAnamnese}
-                    className="bg-copper text-white rounded-btn px-4 py-2 text-sm font-medium shadow-btn hover:opacity-90 active:scale-95 transition-all disabled:opacity-40"
-                  >
-                    {sendingAnamnese ? 'Enviando...' : 'Enviar anamnese'}
-                  </button>
-                )}
-              </div>
-
-              {anamneseError && (
-                <p className="text-sm text-red-500 bg-red-50 rounded-btn px-4 py-2.5 mb-3">
-                  {anamneseError}
-                </p>
-              )}
-
-              {chats.length === 0 ? (
-                <div className="text-center py-6 bg-white rounded-card border border-teal/[0.09]">
-                  <p className="text-sm text-teal/50">Nenhuma anamnese enviada ainda.</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {chats.map(chat => {
-                    const isOpen = chat.status === 'open'
-                    return (
-                      <Link
-                        key={chat.id}
-                        to={isOpen ? '#' : `/coach/students/${id}/chats/${chat.id}`}
-                        onClick={e => { if (isOpen) e.preventDefault() }}
-                        className={`
-                          block bg-white rounded-card border border-teal/[0.09] shadow-card p-4
-                          transition-opacity
-                          ${isOpen ? 'cursor-default opacity-80' : 'hover:opacity-90'}
-                        `}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div>
-                            <p className="font-medium text-teal">
-                              Anamnese de {formatDateShort(chat.created_at)}
-                            </p>
-                            {isOpen ? (
-                              <p className="text-xs text-copper mt-0.5">Aguardando resposta do aluno</p>
-                            ) : (
-                              <p className="text-xs text-teal/50 mt-0.5">
-                                Concluída em {chat.closed_at ? formatDateShort(chat.closed_at) : '—'}
-                              </p>
-                            )}
-                          </div>
-                          <span
-                            className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${
-                              isOpen
-                                ? 'bg-copper/10 text-copper'
-                                : 'bg-teal/10 text-teal'
-                            }`}
-                          >
-                            {isOpen ? 'Em andamento' : 'Respondida'}
-                          </span>
-                        </div>
-                      </Link>
-                    )
-                  })}
-                </div>
-              )}
             </div>
 
             {/* Fichas de treino */}
@@ -442,7 +384,7 @@ export default function CoachStudentDetail() {
               <div className="space-y-2">
                 {data.sessions.map(s => {
                   const duration = formatDuration(s.started_at, s.finished_at)
-                  const totalSets = s.set_logs.length
+                  const totalSets = s.sets_count
                   return (
                     <div
                       key={s.id}
@@ -476,6 +418,77 @@ export default function CoachStudentDetail() {
                 })}
               </div>
             )}
+
+            {/* Anamnese (no fundo: acontece com menos frequência) */}
+            <div className="mt-10">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-syne font-bold text-lg text-teal">Anamnese</h2>
+                {!chats.some(c => c.status === 'open') && (
+                  <button
+                    type="button"
+                    onClick={handleSendAnamnese}
+                    disabled={sendingAnamnese}
+                    className="bg-copper text-white rounded-btn px-4 py-2 text-sm font-medium shadow-btn hover:opacity-90 active:scale-95 transition-all disabled:opacity-40"
+                  >
+                    {sendingAnamnese ? 'Enviando...' : 'Enviar anamnese'}
+                  </button>
+                )}
+              </div>
+
+              {anamneseError && (
+                <p className="text-sm text-red-500 bg-red-50 rounded-btn px-4 py-2.5 mb-3">
+                  {anamneseError}
+                </p>
+              )}
+
+              {chats.length === 0 ? (
+                <div className="text-center py-6 bg-white rounded-card border border-teal/[0.09]">
+                  <p className="text-sm text-teal/50">Nenhuma anamnese enviada ainda.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {chats.map(chat => {
+                    const isOpen = chat.status === 'open'
+                    return (
+                      <Link
+                        key={chat.id}
+                        to={isOpen ? '#' : `/coach/students/${id}/chats/${chat.id}`}
+                        onClick={e => { if (isOpen) e.preventDefault() }}
+                        className={`
+                          block bg-white rounded-card border border-teal/[0.09] shadow-card p-4
+                          transition-opacity
+                          ${isOpen ? 'cursor-default opacity-80' : 'hover:opacity-90'}
+                        `}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div>
+                            <p className="font-medium text-teal">
+                              Anamnese de {formatDateShort(chat.created_at)}
+                            </p>
+                            {isOpen ? (
+                              <p className="text-xs text-copper mt-0.5">Aguardando resposta do aluno</p>
+                            ) : (
+                              <p className="text-xs text-teal/50 mt-0.5">
+                                Concluída em {chat.closed_at ? formatDateShort(chat.closed_at) : '—'}
+                              </p>
+                            )}
+                          </div>
+                          <span
+                            className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${
+                              isOpen
+                                ? 'bg-copper/10 text-copper'
+                                : 'bg-teal/10 text-teal'
+                            }`}
+                          >
+                            {isOpen ? 'Em andamento' : 'Respondida'}
+                          </span>
+                        </div>
+                      </Link>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           </>
         )}
       </div>

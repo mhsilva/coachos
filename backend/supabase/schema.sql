@@ -108,6 +108,20 @@ create unique index if not exists uq_invites_pending
   on invites (coach_id, student_id)
   where status = 'pending';
 
+-- ──────────────────────────────────────────────
+-- INDEXES — FK lookups and common filters
+-- ──────────────────────────────────────────────
+
+create index if not exists idx_students_coach        on students (coach_id);
+create index if not exists idx_workout_plans_coach   on workout_plans (coach_id);
+create index if not exists idx_workout_plans_student on workout_plans (student_id);
+create index if not exists idx_workouts_plan         on workouts (plan_id);
+create index if not exists idx_exercises_workout     on exercises (workout_id);
+create index if not exists idx_sessions_student      on workout_sessions (student_id, started_at desc);
+create index if not exists idx_sessions_workout      on workout_sessions (workout_id);
+create index if not exists idx_set_logs_session      on set_logs (session_id);
+create index if not exists idx_set_logs_exercise     on set_logs (exercise_id);
+
 create table if not exists notifications (
   id         uuid primary key default gen_random_uuid(),
   user_id    uuid not null references profiles(id) on delete cascade,
