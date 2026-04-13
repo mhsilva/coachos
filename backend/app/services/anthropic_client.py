@@ -3,12 +3,14 @@
 Design choice: we use the Messages API (not Managed Agents Sessions). For anamnese
 the agent has no tools — just a system prompt — so the container/session overhead
 of Managed Agents is unwarranted. We fetch the agent's system prompt once via the
-Agents Beta API and then use `client.messages.stream(...)` for the actual chat.
-When we add MCP/tools (step 2), migrate to Sessions.
+Agents Beta API (raw httpx to avoid SDK version churn) and then use
+`client.messages.stream(...)` for the actual chat. When we add MCP/tools (step 2),
+migrate to Sessions.
 """
 from __future__ import annotations
 
 import anthropic
+import httpx
 from app.config import settings
 from app.services import chat_store
 
@@ -16,6 +18,9 @@ _client: anthropic.Anthropic | None = None
 
 MODEL = "claude-haiku-4-5"
 MAX_TOKENS = 16000
+
+ANTHROPIC_API_BASE = "https://api.anthropic.com"
+MANAGED_AGENTS_BETA = "managed-agents-2026-04-01"
 
 
 def get_client() -> anthropic.Anthropic:
@@ -27,15 +32,38 @@ def get_client() -> anthropic.Anthropic:
     return _client
 
 
+def _fetch_agent_via_http(agent_id: str) -> dict:
+    """Hit GET /v1/agents/{id} via httpx.
+
+    Using raw HTTP instead of `client.beta.agents.retrieve(...)` because the
+    Managed Agents namespace was added to anthropic-python only in recent
+    versions; the raw endpoint is stable and version-independent.
+    """
+    if not settings.anthropic_api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY não configurado")
+    resp = httpx.get(
+        f"{ANTHROPIC_API_BASE}/v1/agents/{agent_id}",
+        headers={
+            "x-api-key": settings.anthropic_api_key,
+            "anthropic-version": "2023-06-01",
+            "anthropic-beta": MANAGED_AGENTS_BETA,
+        },
+        timeout=30.0,
+    )
+    if resp.status_code != 200:
+        raise RuntimeError(
+            f"Falha ao buscar agent {agent_id}: {resp.status_code} {resp.text[:200]}"
+        )
+    return resp.json()
+
+
 def get_agent_system_prompt(agent_id: str) -> str:
     """Fetch the agent's system prompt. Cached in Redis (24h TTL)."""
     cached = chat_store.get_cached_system_prompt(agent_id)
     if cached:
         return cached
-    client = get_client()
-    # Managed Agents API: /v1/agents/{id}. SDK sets the required beta header.
-    agent = client.beta.agents.retrieve(agent_id)
-    system_prompt = (getattr(agent, "system", None) or "").strip()
+    agent = _fetch_agent_via_http(agent_id)
+    system_prompt = (agent.get("system") or "").strip()
     if not system_prompt:
         raise RuntimeError(
             f"Agent {agent_id} não tem system prompt configurado"
