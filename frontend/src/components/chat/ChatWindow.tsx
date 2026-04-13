@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useAuth } from '../../hooks/useAuth'
 import { createApi, streamPost } from '../../lib/api'
 
@@ -254,9 +256,77 @@ function Bubble({ role, content }: { role: Role; content: string }) {
   return (
     <div className="flex justify-start">
       <div className="max-w-[85%] bg-white text-teal rounded-card rounded-bl-sm px-4 py-2.5 border border-teal/[0.09] shadow-card">
-        <p className="text-sm font-inter whitespace-pre-wrap leading-relaxed">
-          {content}
-        </p>
+        <div className="text-sm font-inter leading-relaxed chat-md">
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              p: ({ children }) => (
+                <p className="mb-2 last:mb-0">{children}</p>
+              ),
+              strong: ({ children }) => (
+                <strong className="font-semibold text-teal">{children}</strong>
+              ),
+              em: ({ children }) => <em className="italic">{children}</em>,
+              h1: ({ children }) => (
+                <h1 className="font-syne font-bold text-base mt-1 mb-2">{children}</h1>
+              ),
+              h2: ({ children }) => (
+                <h2 className="font-syne font-bold text-base mt-1 mb-2">{children}</h2>
+              ),
+              h3: ({ children }) => (
+                <h3 className="font-syne font-bold text-sm mt-1 mb-2">{children}</h3>
+              ),
+              ul: ({ children }) => (
+                <ul className="list-disc list-outside pl-5 mb-2 last:mb-0 space-y-1">{children}</ul>
+              ),
+              ol: ({ children }) => (
+                <ol className="list-decimal list-outside pl-5 mb-2 last:mb-0 space-y-1">{children}</ol>
+              ),
+              li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+              hr: () => <hr className="my-3 border-teal/[0.1]" />,
+              a: ({ href, children }) => (
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-copper underline underline-offset-2 hover:opacity-80"
+                >
+                  {children}
+                </a>
+              ),
+              code: ({ children }) => (
+                <code className="font-jetbrains text-xs bg-teal/[0.06] rounded px-1 py-0.5">
+                  {children}
+                </code>
+              ),
+              pre: ({ children }) => (
+                <pre className="font-jetbrains text-xs bg-teal/[0.06] rounded-btn p-2.5 my-2 overflow-x-auto">
+                  {children}
+                </pre>
+              ),
+              blockquote: ({ children }) => (
+                <blockquote className="border-l-2 border-copper/50 pl-3 italic text-teal/70 my-2">
+                  {children}
+                </blockquote>
+              ),
+              table: ({ children }) => (
+                <div className="overflow-x-auto my-2">
+                  <table className="w-full text-xs border-collapse">{children}</table>
+                </div>
+              ),
+              th: ({ children }) => (
+                <th className="border border-teal/[0.1] bg-teal/[0.04] px-2 py-1 text-left font-semibold">
+                  {children}
+                </th>
+              ),
+              td: ({ children }) => (
+                <td className="border border-teal/[0.1] px-2 py-1">{children}</td>
+              ),
+            }}
+          >
+            {content}
+          </ReactMarkdown>
+        </div>
       </div>
     </div>
   )
