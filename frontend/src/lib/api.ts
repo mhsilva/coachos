@@ -42,3 +42,63 @@ export function createApi(token: string) {
       request<T>(path, { method: 'DELETE' }, token),
   }
 }
+
+/**
+ * SSE-streaming POST. The server is expected to emit `data: <json>\n\n` lines.
+ * Parsed JSON chunks are handed to `onEvent` as they arrive.
+ *
+ * Resolves when the stream ends cleanly. Rejects on HTTP error or network drop.
+ */
+export async function streamPost(
+  path: string,
+  body: unknown,
+  token: string,
+  onEvent: (evt: unknown) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      Accept: 'text/event-stream',
+    },
+    body: JSON.stringify(body),
+    signal,
+  })
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error((err as { detail?: string }).detail ?? 'Erro desconhecido')
+  }
+  if (!res.body) throw new Error('Resposta sem corpo')
+
+  const reader = res.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+
+    // Process complete SSE events (separated by double newlines)
+    let boundary = buffer.indexOf('\n\n')
+    while (boundary !== -1) {
+      const block = buffer.slice(0, boundary)
+      buffer = buffer.slice(boundary + 2)
+      for (const line of block.split('\n')) {
+        const trimmed = line.trim()
+        if (!trimmed.startsWith('data:')) continue
+        const payload = trimmed.slice(5).trim()
+        if (!payload) continue
+        try {
+          onEvent(JSON.parse(payload))
+        } catch {
+          // ignore malformed chunk
+        }
+      }
+      boundary = buffer.indexOf('\n\n')
+    }
+  }
+}

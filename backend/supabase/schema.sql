@@ -311,6 +311,41 @@ create policy "notifications: own update"
   on notifications for update using (user_id = auth.uid());
 
 -- ──────────────────────────────────────────────
+-- CHATS — generic chat container (anamnese, feedback, etc.)
+-- Transcript while open: Upstash Redis. On close: Supabase Storage blob.
+-- Only metadata lives here.
+-- ──────────────────────────────────────────────
+
+create table if not exists chats (
+  id           uuid primary key default gen_random_uuid(),
+  type         text not null,
+  student_id   uuid not null references students(id) on delete cascade,
+  coach_id     uuid not null references coaches(id) on delete cascade,
+  status       text not null default 'open' check (status in ('open', 'closed')),
+  storage_path text,
+  created_at   timestamptz default now(),
+  closed_at    timestamptz
+);
+
+create index if not exists idx_chats_student
+  on chats (student_id, type, created_at desc);
+
+create index if not exists idx_chats_coach
+  on chats (coach_id, type, created_at desc);
+
+alter table chats enable row level security;
+
+create policy "chats: student reads own"
+  on chats for select using (
+    student_id in (select id from students where user_id = auth.uid())
+  );
+
+create policy "chats: coach reads own students"
+  on chats for select using (
+    coach_id in (select id from coaches where user_id = auth.uid())
+  );
+
+-- ──────────────────────────────────────────────
 -- HELPER: assign role to a user (run in SQL Editor)
 -- ──────────────────────────────────────────────
 -- update auth.users

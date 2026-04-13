@@ -6,6 +6,13 @@ class Settings(BaseSettings):
     supabase_service_role_key: str
     allowed_origins: str = "http://localhost:5173"
 
+    # Chat / Anamnese
+    anthropic_api_key: str = ""
+    anamnese_agent_id: str = ""
+    upstash_redis_rest_url: str = ""
+    upstash_redis_rest_token: str = ""
+    supabase_chats_bucket: str = "chats"
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     @property

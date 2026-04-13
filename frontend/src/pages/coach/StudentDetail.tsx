@@ -59,6 +59,14 @@ interface PlanSummary {
   created_at: string
 }
 
+interface ChatSummary {
+  id: string
+  type: string
+  status: 'open' | 'closed'
+  created_at: string
+  closed_at: string | null
+}
+
 function formatDateShort(iso: string) {
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
 }
@@ -96,10 +104,13 @@ export default function CoachStudentDetail() {
   const { session } = useAuth()
   const [data, setData] = useState<DetailData | null>(null)
   const [plans, setPlans] = useState<PlanSummary[]>([])
+  const [chats, setChats] = useState<ChatSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedExercise, setSelectedExercise] = useState<string>('')
   const [deletingPlanId, setDeletingPlanId] = useState<string | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [sendingAnamnese, setSendingAnamnese] = useState(false)
+  const [anamneseError, setAnamneseError] = useState('')
 
   const fetchData = useCallback(() => {
     if (!session?.access_token || !id) return
@@ -107,10 +118,12 @@ export default function CoachStudentDetail() {
     Promise.all([
       api.get<DetailData>(`/dashboard/student/${id}`),
       api.get<PlanSummary[]>(`/workouts/plans?student_id=${id}`),
+      api.get<ChatSummary[]>(`/chats?student_id=${id}&type=anamnese`),
     ])
-      .then(([detail, plansData]) => {
+      .then(([detail, plansData, chatsData]) => {
         setData(detail)
         setPlans(plansData)
+        setChats(chatsData)
         const prog = buildProgressionData(detail.sessions)
         const first = Object.keys(prog)[0] ?? ''
         setSelectedExercise(first)
@@ -118,6 +131,23 @@ export default function CoachStudentDetail() {
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [session, id])
+
+  async function handleSendAnamnese() {
+    if (!session?.access_token || !id || sendingAnamnese) return
+    setSendingAnamnese(true)
+    setAnamneseError('')
+    try {
+      const newChat = await createApi(session.access_token).post<ChatSummary>('/chats', {
+        type: 'anamnese',
+        student_id: id,
+      })
+      setChats(prev => [newChat, ...prev])
+    } catch (err) {
+      setAnamneseError(err instanceof Error ? err.message : 'Erro ao enviar anamnese')
+    } finally {
+      setSendingAnamnese(false)
+    }
+  }
 
   useEffect(fetchData, [fetchData])
 
@@ -185,6 +215,77 @@ export default function CoachStudentDetail() {
                   {data.sessions.length} sessões registradas
                 </p>
               </div>
+            </div>
+
+            {/* Anamnese */}
+            <div className="mb-8">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-syne font-bold text-lg text-teal">Anamnese</h2>
+                {!chats.some(c => c.status === 'open') && (
+                  <button
+                    type="button"
+                    onClick={handleSendAnamnese}
+                    disabled={sendingAnamnese}
+                    className="bg-copper text-white rounded-btn px-4 py-2 text-sm font-medium shadow-btn hover:opacity-90 active:scale-95 transition-all disabled:opacity-40"
+                  >
+                    {sendingAnamnese ? 'Enviando...' : 'Enviar anamnese'}
+                  </button>
+                )}
+              </div>
+
+              {anamneseError && (
+                <p className="text-sm text-red-500 bg-red-50 rounded-btn px-4 py-2.5 mb-3">
+                  {anamneseError}
+                </p>
+              )}
+
+              {chats.length === 0 ? (
+                <div className="text-center py-6 bg-white rounded-card border border-teal/[0.09]">
+                  <p className="text-sm text-teal/50">Nenhuma anamnese enviada ainda.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {chats.map(chat => {
+                    const isOpen = chat.status === 'open'
+                    return (
+                      <Link
+                        key={chat.id}
+                        to={isOpen ? '#' : `/coach/students/${id}/chats/${chat.id}`}
+                        onClick={e => { if (isOpen) e.preventDefault() }}
+                        className={`
+                          block bg-white rounded-card border border-teal/[0.09] shadow-card p-4
+                          transition-opacity
+                          ${isOpen ? 'cursor-default opacity-80' : 'hover:opacity-90'}
+                        `}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div>
+                            <p className="font-medium text-teal">
+                              Anamnese de {formatDateShort(chat.created_at)}
+                            </p>
+                            {isOpen ? (
+                              <p className="text-xs text-copper mt-0.5">Aguardando resposta do aluno</p>
+                            ) : (
+                              <p className="text-xs text-teal/50 mt-0.5">
+                                Concluída em {chat.closed_at ? formatDateShort(chat.closed_at) : '—'}
+                              </p>
+                            )}
+                          </div>
+                          <span
+                            className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${
+                              isOpen
+                                ? 'bg-copper/10 text-copper'
+                                : 'bg-teal/10 text-teal'
+                            }`}
+                          >
+                            {isOpen ? 'Em andamento' : 'Respondida'}
+                          </span>
+                        </div>
+                      </Link>
+                    )
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Fichas de treino */}

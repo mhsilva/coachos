@@ -12,6 +12,8 @@ import CoachPlanBuilder from './pages/coach/PlanBuilder'
 import StudentToday from './pages/student/Today'
 import StudentHistory from './pages/student/History'
 import StudentProfile from './pages/student/Profile'
+import StudentChat from './pages/student/Chat'
+import CoachChatTranscript from './pages/coach/ChatTranscript'
 import AdminCoaches from './pages/admin/Coaches'
 import Notifications from './pages/Notifications'
 import Profile from './pages/Profile'
@@ -43,12 +45,14 @@ export default function App() {
               <Route path="/coach/students/:id" element={<CoachStudentDetail />} />
               <Route path="/coach/students/:id/plans/new" element={<CoachPlanBuilder />} />
               <Route path="/coach/students/:id/plans/:planId" element={<CoachPlanBuilder />} />
+              <Route path="/coach/students/:id/chats/:chatId" element={<CoachChatTranscript />} />
             </Route>
 
             <Route element={<ProtectedRoute allowedRoles={['student']} />}>
               <Route path="/student" element={<StudentToday />} />
               <Route path="/student/history" element={<StudentHistory />} />
               <Route path="/student/profile" element={<StudentProfile />} />
+              <Route path="/student/chat/:id" element={<StudentChat />} />
             </Route>
 
             <Route element={<ProtectedRoute allowedRoles={['admin']} />}>

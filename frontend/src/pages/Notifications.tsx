@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { AppLayout } from '../components/AppLayout'
 import { useAuth } from '../hooks/useAuth'
 import { useNotifications } from '../contexts/NotificationContext'
@@ -28,10 +29,34 @@ function timeAgo(iso: string): string {
 export default function Notifications() {
   const { session } = useAuth()
   const { refreshCount } = useNotifications()
+  const navigate = useNavigate()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
   const [respondingId, setRespondingId] = useState<string | null>(null)
   const [error, setError] = useState('')
+
+  async function markRead(notificationId: string) {
+    if (!session?.access_token) return
+    await createApi(session.access_token).patch('/notifications/read', {
+      notification_ids: [notificationId],
+    })
+    setNotifications(prev =>
+      prev.map(n => (n.id === notificationId ? { ...n, is_read: true } : n)),
+    )
+    await refreshCount()
+  }
+
+  async function handleOpenAnamnese(n: Notification) {
+    const chatId = n.payload?.chat_id
+    if (!chatId) return
+    await markRead(n.id)
+    if (n.type === 'anamnese_request') {
+      navigate(`/student/chat/${chatId}`)
+    } else if (n.type === 'anamnese_completed') {
+      const studentId = n.payload?.student_id
+      if (studentId) navigate(`/coach/students/${studentId}/chats/${chatId}`)
+    }
+  }
 
   async function fetchNotifications() {
     if (!session?.access_token) return
@@ -165,6 +190,26 @@ export default function Notifications() {
                       Recusar
                     </button>
                   </div>
+                )}
+
+                {/* Anamnese actions */}
+                {n.type === 'anamnese_request' && (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenAnamnese(n)}
+                    className="mt-3 w-full bg-copper text-white rounded-btn py-2 text-sm font-medium shadow-btn hover:opacity-90 transition-all"
+                  >
+                    Responder
+                  </button>
+                )}
+                {n.type === 'anamnese_completed' && (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenAnamnese(n)}
+                    className="mt-3 w-full border border-teal/[0.15] text-teal rounded-btn py-2 text-sm font-medium hover:bg-surface transition-colors"
+                  >
+                    Ver transcript
+                  </button>
                 )}
 
                 {/* Response confirmation */}
