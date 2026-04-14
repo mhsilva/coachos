@@ -192,19 +192,15 @@ async def get_student_plans(
 
     plans = (
         sb.table("workout_plans")
-        .select("*, workouts(*, exercises(*))")
+        .select(
+            "id, name, schedule_type, notes, created_at,"
+            "workouts(id, name, weekday, sequence_position, exercises(id))"
+        )
         .eq("student_id", student_id)
         .eq("coach_id", coach.data[0]["id"])
         .order("created_at", desc=True)
         .execute()
     )
-
-    for plan in plans.data:
-        for workout in plan.get("workouts") or []:
-            workout["exercises"] = sorted(
-                workout.get("exercises") or [],
-                key=lambda e: e.get("order_index", 0),
-            )
 
     return plans.data
 

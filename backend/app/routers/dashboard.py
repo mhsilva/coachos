@@ -6,15 +6,33 @@ from datetime import date
 router = APIRouter()
 
 
+def _get_coach_id(sb, user_id: str) -> str:
+    coach = sb.table("coaches").select("id").eq("user_id", user_id).execute()
+    if not coach.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Coach não encontrado")
+    return coach.data[0]["id"]
+
+
+@router.get("/coach/students")
+async def coach_students(user: dict = Depends(require_role("coach"))) -> list:
+    """Return only the students list for the coach (lightweight)."""
+    sb = get_supabase()
+    coach_id = _get_coach_id(sb, user["sub"])
+
+    students = (
+        sb.table("students")
+        .select("id, user_id, profiles(full_name, avatar_url, is_active)")
+        .eq("coach_id", coach_id)
+        .execute()
+    )
+    return students.data
+
+
 @router.get("/coach")
 async def coach_dashboard(user: dict = Depends(require_role("coach"))) -> dict:
     """Return KPIs and recent load updates for the authenticated coach."""
     sb = get_supabase()
-
-    coach = sb.table("coaches").select("id").eq("user_id", user["sub"]).execute()
-    if not coach.data:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Coach não encontrado")
-    coach_id = coach.data[0]["id"]
+    coach_id = _get_coach_id(sb, user["sub"])
 
     students = (
         sb.table("students")

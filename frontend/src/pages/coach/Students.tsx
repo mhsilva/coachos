@@ -15,9 +15,7 @@ interface Student {
   } | null
 }
 
-interface DashboardData {
-  students: Student[]
-}
+type StudentList = Student[]
 
 interface Invite {
   id: string
@@ -47,11 +45,11 @@ export default function CoachStudents() {
     if (!session?.access_token) return
     const api = createApi(session.access_token)
     Promise.all([
-      api.get<DashboardData>('/dashboard/coach'),
+      api.get<StudentList>('/dashboard/coach/students'),
       api.get<Invite[]>('/auth/invites/sent'),
     ])
-      .then(([dashboard, invites]) => {
-        setStudents(dashboard.students)
+      .then(([studentList, invites]) => {
+        setStudents(studentList)
         setPendingInvites(invites.filter(i => i.status === 'pending'))
       })
       .catch(console.error)
