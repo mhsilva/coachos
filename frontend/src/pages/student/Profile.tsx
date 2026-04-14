@@ -78,9 +78,9 @@ export default function StudentProfile() {
     }
   }
 
-  const hasChanges =
-    birthDate !== (studentData?.birth_date ?? '') ||
-    weightKg !== (studentData?.weight_kg !== null ? String(studentData.weight_kg) : '')
+  const origBirth = studentData?.birth_date ?? ''
+  const origWeight = studentData?.weight_kg != null ? String(studentData.weight_kg) : ''
+  const hasChanges = birthDate !== origBirth || weightKg !== origWeight
 
   return (
     <AppLayout>
