@@ -26,4 +26,13 @@
   .page-title {
     @apply font-syne font-extrabold text-2xl text-teal tracking-[-0.02em];
   }
+
+  /* Hide scrollbar but keep scroll functional (tab bars, etc.) */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
 }
