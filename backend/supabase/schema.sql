@@ -29,6 +29,8 @@ create table if not exists students (
   id         uuid primary key default gen_random_uuid(),
   user_id    uuid unique references profiles(id) on delete cascade,
   coach_id   uuid references coaches(id) on delete set null,
+  birth_date date,
+  weight_kg  numeric(5,1),
   created_at timestamptz default now()
 );
 

@@ -95,13 +95,20 @@ async def student_detail(
     # Verify student belongs to this coach
     student = (
         sb.table("students")
-        .select("id, user_id, profiles(full_name, avatar_url)")
+        .select("id, user_id, birth_date, weight_kg, profiles(full_name, avatar_url)")
         .eq("id", student_id)
         .eq("coach_id", coach.data[0]["id"])
         .execute()
     )
     if not student.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Aluno não encontrado")
+
+    # Resolve student email from auth (not stored in profiles/students)
+    try:
+        auth_user = sb.auth.admin.get_user_by_id(student.data[0]["user_id"])
+        student.data[0]["email"] = auth_user.user.email if auth_user and auth_user.user else None
+    except Exception:
+        student.data[0]["email"] = None
 
     SESSIONS_LIMIT = 20
     PROGRESSION_SESSIONS = 15

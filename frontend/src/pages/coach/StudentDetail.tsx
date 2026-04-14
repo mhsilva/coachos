@@ -34,6 +34,9 @@ interface ProgressionLog {
 
 interface StudentProfile {
   id: string
+  email: string | null
+  birth_date: string | null
+  weight_kg: number | null
   profiles: {
     full_name: string | null
     avatar_url: string | null
@@ -464,7 +467,7 @@ export default function CoachStudentDetail() {
 
             {/* ═══════════════ TAB: Cadastro ═══════════════ */}
             {activeTab === 'cadastro' && (
-              <TabPlaceholder label="Cadastro" description="Dados pessoais, contato e observações do aluno." />
+              <CadastroTab student={data.student} />
             )}
 
             {/* ═══════════════ TAB: Avaliações ═══════════════ */}
@@ -555,6 +558,62 @@ export default function CoachStudentDetail() {
         )}
       </div>
     </AppLayout>
+  )
+}
+
+// ─────────────────────────────────────────────
+// Cadastro (read-only for coach)
+// ─────────────────────────────────────────────
+
+function calcAge(birthDate: string): number | null {
+  const birth = new Date(birthDate + 'T00:00:00')
+  if (isNaN(birth.getTime())) return null
+  const today = new Date()
+  let age = today.getFullYear() - birth.getFullYear()
+  const m = today.getMonth() - birth.getMonth()
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--
+  return age
+}
+
+function CadastroTab({ student }: { student: StudentProfile }) {
+  const name = student.profiles?.full_name
+  const age = student.birth_date ? calcAge(student.birth_date) : null
+
+  const fields: { label: string; value: string | null }[] = [
+    { label: 'Nome', value: name ?? null },
+    { label: 'Email', value: student.email ?? null },
+    {
+      label: 'Idade',
+      value: age !== null ? `${age} anos` : null,
+    },
+    {
+      label: 'Peso',
+      value: student.weight_kg !== null ? `${student.weight_kg} kg` : null,
+    },
+  ]
+
+  const filled = fields.some(f => f.value)
+
+  return (
+    <div>
+      {!filled ? (
+        <div className="text-center py-10 bg-white rounded-card border border-teal/[0.09]">
+          <p className="text-teal/30 text-3xl mb-2">📝</p>
+          <p className="text-sm text-teal/50">O aluno ainda não preencheu seus dados cadastrais.</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-card border border-teal/[0.09] shadow-card divide-y divide-teal/[0.06]">
+          {fields.map(f => (
+            <div key={f.label} className="flex items-center justify-between px-5 py-3.5">
+              <span className="text-sm text-teal/50">{f.label}</span>
+              <span className="text-sm font-medium text-teal font-jetbrains">
+                {f.value ?? <span className="text-teal/25 font-inter">—</span>}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 

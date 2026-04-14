@@ -44,3 +44,8 @@ class NotificationOut(BaseModel):
 class MarkReadRequest(BaseModel):
     notification_ids: list[UUID] | None = None
     all: bool = False
+
+
+class UpdateStudentProfileRequest(BaseModel):
+    birth_date: str | None = None  # ISO date string YYYY-MM-DD
+    weight_kg: float | None = None
