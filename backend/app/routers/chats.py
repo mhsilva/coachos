@@ -13,7 +13,9 @@ Endpoints:
 from __future__ import annotations
 
 import json
+import logging
 import re
+import threading
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -23,8 +25,10 @@ from fastapi.responses import StreamingResponse
 from app.config import settings
 from app.dependencies import get_current_user, require_role
 from app.models.chat import CreateChatRequest, SendMessageRequest
-from app.services import anthropic_client, chat_store, transcript_store
+from app.services import anamnese_processor, anthropic_client, chat_store, transcript_store
 from app.supabase_client import get_supabase
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -77,6 +81,45 @@ def _fetch_chat(sb, chat_id: str) -> dict:
     if not result.data:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Chat não encontrado")
     return result.data[0]
+
+
+# ─────────────────────────────────────────────
+# Opening greeting — seeded so the student sees a message on first open
+# without having to type first. Mirrors the instructions the agent would
+# follow per the anamnese system prompt, but hardcoded so there's zero
+# latency / LLM cost to bootstrap the chat.
+# ─────────────────────────────────────────────
+
+def _build_greeting(first_name: str | None) -> str:
+    hi = f"Opa {first_name}, tudo bem?" if first_name else "Opa, tudo bem?"
+    return (
+        f"{hi} Sou seu assistente pra anamnese.\n\n"
+        "Vou fazer algumas perguntas pra entender seu perfil e te conhecer melhor — "
+        "assim seu coach consegue montar um treino que faça sentido pra você.\n\n"
+        "Pra começar, se apresenta: me conta a sua idade, peso e percentual de gordura "
+        "(se souber), um pouco sobre você, seus objetivos com o treino, suas experiências "
+        "com atividades físicas no geral até aqui, e como são seus hábitos do dia a dia "
+        "(fuma, bebe, se tem acompanhamento nutricional, etc).\n\n"
+        "Pode mandar tudo num texto só, no que faltar a gente vai explorando."
+    )
+
+
+def _seed_greeting_if_empty(sb, chat: dict) -> None:
+    """Idempotent: if this open anamnese chat has no messages yet, append a greeting.
+
+    Called on chat creation AND as a fallback on first student GET (in case
+    Redis TTL expired before the student opened the chat).
+    """
+    if chat.get("type") != "anamnese" or chat.get("status") != "open":
+        return
+    if chat_store.get_messages(chat["id"]):
+        return  # already has messages — nothing to do
+
+    student_user_id = _student_user_id(sb, chat["student_id"])
+    full_name = _profile_name(sb, student_user_id, fallback="")
+    first_name = full_name.split(" ")[0] if full_name else None
+    greeting = _build_greeting(first_name)
+    chat_store.append_message(chat["id"], "assistant", greeting)
 
 
 def _assert_participant(chat: dict, user: dict, sb) -> str:
@@ -147,6 +190,9 @@ async def create_chat(
     }).execute()
     chat_id = chat.data[0]["id"]
 
+    # Seed the opening greeting so the student sees a message on first open
+    _seed_greeting_if_empty(sb, chat.data[0])
+
     # Notify the student
     coach_name = _profile_name(sb, user["sub"], fallback=user.get("email", "Coach"))
     sb.table("notifications").insert({
@@ -211,6 +257,9 @@ async def get_chat(
         # Student sees their open chat; coach is allowed to read metadata but
         # not the live transcript (agreed UX: coach reads only after close).
         if side == "student":
+            # Fallback seed: if Redis TTL expired before the student ever
+            # opened the chat, re-seed the opening greeting now.
+            _seed_greeting_if_empty(sb, chat)
             messages = chat_store.get_messages(chat_id)
     else:
         # Closed: both sides read from storage
@@ -227,6 +276,7 @@ async def get_chat(
         "created_at": chat["created_at"],
         "closed_at": chat.get("closed_at"),
         "storage_path": chat.get("storage_path"),
+        "extraction_status": chat.get("extraction_status"),
         "messages": [
             {"role": m["role"], "content": m["content"], "at": m.get("at")}
             for m in messages
@@ -283,6 +333,15 @@ async def send_message(
         {"role": m["role"], "content": m["content"]}
         for m in chat_store.get_messages(chat_id)
     ]
+    # Anthropic's Messages API requires the first message to be 'user'. When
+    # we seed the conversation with an assistant greeting (so the student
+    # sees a message without having to type first), the API sequence starts
+    # with assistant — prepend an invisible user marker to keep the API happy.
+    if messages_for_api and messages_for_api[0]["role"] == "assistant":
+        messages_for_api.insert(
+            0,
+            {"role": "user", "content": "[O aluno acabou de abrir o chat da anamnese.]"},
+        )
 
     chat_id_local = chat_id
     chat_meta = chat
@@ -324,6 +383,7 @@ async def send_message(
                     "status": "closed",
                     "storage_path": path,
                     "closed_at": closed_at,
+                    "extraction_status": "pending",
                 }).eq("id", chat_id_local).execute()
 
                 # Notify coach
@@ -342,6 +402,15 @@ async def send_message(
                 }).execute()
 
                 chat_store.delete_chat(chat_id_local)
+
+                # Fire-and-forget extraction → scoring → persistence.
+                # Runs in a daemon thread so the SSE generator can return
+                # immediately and the aluno sees the "finished" badge.
+                _spawn_extraction(
+                    chat_id=chat_id_local,
+                    student_id=chat_meta["student_id"],
+                    storage_path=path,
+                )
 
                 yield _sse({
                     "type": "done",
@@ -362,3 +431,49 @@ async def send_message(
             "X-Accel-Buffering": "no",  # disable buffering on nginx-like proxies
         },
     )
+
+
+# ─────────────────────────────────────────────
+# Background extraction: thread runner + retry endpoint
+# ─────────────────────────────────────────────
+
+def _spawn_extraction(*, chat_id: str, student_id: str, storage_path: str) -> None:
+    """Run the anamnese processor in a daemon thread so the caller is not blocked."""
+    def _runner() -> None:
+        try:
+            anamnese_processor.process_closed_anamnese(
+                chat_id=chat_id,
+                student_id=student_id,
+                storage_path=storage_path,
+            )
+        except Exception:  # pragma: no cover — processor already swallows
+            logger.exception("Extraction runner crashed for chat %s", chat_id)
+
+    threading.Thread(target=_runner, daemon=True).start()
+
+
+@router.post("/{chat_id}/reextract", status_code=202)
+async def reextract_chat(
+    chat_id: str,
+    user: dict = Depends(require_role("coach")),
+) -> dict:
+    """Coach manually retries the structured extraction of a closed anamnese."""
+    sb = get_supabase()
+    chat = _fetch_chat(sb, chat_id)
+
+    # Ownership check — coach must own the chat
+    coach_id = _get_coach_id(sb, user["sub"])
+    if chat["coach_id"] != coach_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Chat não é seu")
+
+    if chat["status"] != "closed" or not chat.get("storage_path"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Chat ainda não finalizado")
+
+    sb.table("chats").update({"extraction_status": "pending"}).eq("id", chat_id).execute()
+
+    _spawn_extraction(
+        chat_id=chat_id,
+        student_id=chat["student_id"],
+        storage_path=chat["storage_path"],
+    )
+    return {"detail": "Reextração iniciada"}

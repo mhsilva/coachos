@@ -11,6 +11,7 @@ import {
 } from 'recharts'
 import { AppLayout } from '../../components/AppLayout'
 import { AssessmentsTab } from '../../components/AssessmentsTab'
+import { ProfileTab } from '../../components/ProfileTab'
 import { useAuth } from '../../hooks/useAuth'
 import { createApi } from '../../lib/api'
 
@@ -73,6 +74,7 @@ interface ChatSummary {
   status: 'open' | 'closed'
   created_at: string
   closed_at: string | null
+  extraction_status: 'pending' | 'done' | 'failed' | null
 }
 
 // ─────────────────────────────────────────────
@@ -82,6 +84,7 @@ interface ChatSummary {
 const TABS = [
   { key: 'treino', label: 'Treino' },
   { key: 'cadastro', label: 'Cadastro' },
+  { key: 'perfil', label: 'Perfil' },
   { key: 'avaliacoes', label: 'Avaliações' },
   { key: 'testes', label: 'Testes' },
   { key: 'anamnese', label: 'Anamnese' },
@@ -142,6 +145,7 @@ export default function CoachStudentDetail() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [sendingAnamnese, setSendingAnamnese] = useState(false)
   const [anamneseError, setAnamneseError] = useState('')
+  const [reextractingId, setReextractingId] = useState<string | null>(null)
 
   const fetchData = useCallback(() => {
     if (!session?.access_token || !id) return
@@ -193,6 +197,22 @@ export default function CoachStudentDetail() {
       setAnamneseError(err instanceof Error ? err.message : 'Erro ao enviar anamnese')
     } finally {
       setSendingAnamnese(false)
+    }
+  }
+
+  async function handleReextract(chatId: string) {
+    if (!session?.access_token || reextractingId) return
+    setReextractingId(chatId)
+    try {
+      await createApi(session.access_token).post(`/chats/${chatId}/reextract`, {})
+      // Optimistic: flip status to pending locally; user can refresh to see done/failed
+      setChats(prev =>
+        prev.map(c => (c.id === chatId ? { ...c, extraction_status: 'pending' } : c)),
+      )
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setReextractingId(null)
     }
   }
 
@@ -471,6 +491,11 @@ export default function CoachStudentDetail() {
               <CadastroTab student={data.student} />
             )}
 
+            {/* ═══════════════ TAB: Perfil ═══════════════ */}
+            {activeTab === 'perfil' && id && session?.access_token && (
+              <ProfileTab studentId={id} token={session.access_token} />
+            )}
+
             {/* ═══════════════ TAB: Avaliações ═══════════════ */}
             {activeTab === 'avaliacoes' && id && session?.access_token && (
               <AssessmentsTab studentId={id} token={session.access_token} />
@@ -514,41 +539,78 @@ export default function CoachStudentDetail() {
                   <div className="space-y-2">
                     {chats.map(chat => {
                       const isOpen = chat.status === 'open'
+                      const extractionLabel =
+                        chat.extraction_status === 'pending'
+                          ? 'Processando perfil...'
+                          : chat.extraction_status === 'failed'
+                          ? 'Falha ao processar perfil'
+                          : chat.extraction_status === 'done'
+                          ? 'Perfil extraído'
+                          : null
                       return (
-                        <Link
+                        <div
                           key={chat.id}
-                          to={isOpen ? '#' : `/coach/students/${id}/chats/${chat.id}`}
-                          onClick={e => { if (isOpen) e.preventDefault() }}
                           className={`
-                            block bg-white rounded-card border border-teal/[0.09] shadow-card p-4
+                            bg-white rounded-card border border-teal/[0.09] shadow-card p-4
                             transition-opacity
-                            ${isOpen ? 'cursor-default opacity-80' : 'hover:opacity-90'}
+                            ${isOpen ? 'opacity-80' : ''}
                           `}
                         >
                           <div className="flex items-center justify-between gap-2">
-                            <div>
+                            <Link
+                              to={isOpen ? '#' : `/coach/students/${id}/chats/${chat.id}`}
+                              onClick={e => { if (isOpen) e.preventDefault() }}
+                              className={`flex-1 min-w-0 ${isOpen ? 'cursor-default' : 'hover:opacity-80'}`}
+                            >
                               <p className="font-medium text-teal">
                                 Anamnese de {formatDateShort(chat.created_at)}
                               </p>
                               {isOpen ? (
                                 <p className="text-xs text-copper mt-0.5">Aguardando resposta do aluno</p>
                               ) : (
-                                <p className="text-xs text-teal/50 mt-0.5">
-                                  Concluída em {chat.closed_at ? formatDateShort(chat.closed_at) : '—'}
-                                </p>
+                                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                  <span className="text-xs text-teal/50">
+                                    Concluída em {chat.closed_at ? formatDateShort(chat.closed_at) : '—'}
+                                  </span>
+                                  {extractionLabel && (
+                                    <span
+                                      className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                                        chat.extraction_status === 'done'
+                                          ? 'bg-teal/10 text-teal'
+                                          : chat.extraction_status === 'failed'
+                                          ? 'bg-red-100 text-red-700'
+                                          : 'bg-copper/10 text-copper'
+                                      }`}
+                                    >
+                                      {extractionLabel}
+                                    </span>
+                                  )}
+                                </div>
                               )}
+                            </Link>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {!isOpen && chat.extraction_status === 'failed' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleReextract(chat.id)}
+                                  disabled={reextractingId === chat.id}
+                                  className="text-xs font-medium text-copper hover:underline disabled:opacity-40"
+                                >
+                                  {reextractingId === chat.id ? '...' : 'Tentar de novo'}
+                                </button>
+                              )}
+                              <span
+                                className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                                  isOpen
+                                    ? 'bg-copper/10 text-copper'
+                                    : 'bg-teal/10 text-teal'
+                                }`}
+                              >
+                                {isOpen ? 'Em andamento' : 'Respondida'}
+                              </span>
                             </div>
-                            <span
-                              className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${
-                                isOpen
-                                  ? 'bg-copper/10 text-copper'
-                                  : 'bg-teal/10 text-teal'
-                              }`}
-                            >
-                              {isOpen ? 'Em andamento' : 'Respondida'}
-                            </span>
                           </div>
-                        </Link>
+                        </div>
                       )
                     })}
                   </div>
