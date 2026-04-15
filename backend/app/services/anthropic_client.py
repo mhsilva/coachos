@@ -76,8 +76,11 @@ def stream_chat(system_prompt: str, messages: list[dict]):
     """Return the streaming context manager.
 
     `messages` must be a list of {role, content} dicts (no `at` field — strip that
-    before calling). System prompt goes as a single cacheable text block so the
-    stable preamble hits the prompt cache on every turn after the first.
+    before calling). Content may be a string OR a list of content blocks with
+    cache_control annotations when callers want fine-grained prompt caching.
+
+    System prompt goes as a single cacheable text block so the stable preamble
+    hits the prompt cache on every turn after the first.
 
     Note: Haiku 4.5 doesn't support adaptive thinking — we skip `thinking` here.
     For a chat/anamnese flow the model doesn't need extended reasoning.

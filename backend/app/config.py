@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     # Chat / Anamnese
     anthropic_api_key: str = ""
     anamnese_agent_id: str = ""
+    coach_assistant_agent_id: str = ""
     upstash_redis_rest_url: str = ""
     upstash_redis_rest_token: str = ""
     supabase_chats_bucket: str = "chats"
