@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { AppLayout } from '../../components/AppLayout'
 import { useAuth } from '../../hooks/useAuth'
 import { createApi } from '../../lib/api'
@@ -15,7 +16,8 @@ interface StudentData {
 }
 
 export default function StudentProfile() {
-  const { user, session, coachRequested } = useAuth()
+  const { user, session, coachRequested, signOut } = useAuth()
+  const navigate = useNavigate()
   const [requested, setRequested] = useState(coachRequested)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -62,6 +64,11 @@ export default function StudentProfile() {
     } finally {
       setSaving(false)
     }
+  }
+
+  async function handleSignOut() {
+    await signOut()
+    navigate('/login')
   }
 
   async function handleRequestCoach() {
@@ -198,6 +205,19 @@ export default function StudentProfile() {
             </button>
           )}
         </div>
+
+        <button
+          type="button"
+          onClick={handleSignOut}
+          className="
+            w-full mt-6 border border-teal/[0.15] rounded-btn py-3
+            text-sm font-medium text-teal/60
+            hover:bg-surface active:scale-[0.98]
+            transition-all
+          "
+        >
+          Sair da conta
+        </button>
       </div>
     </AppLayout>
   )
