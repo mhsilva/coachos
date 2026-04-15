@@ -1,7 +1,9 @@
+import json
 from fastapi import APIRouter, HTTPException, status, Depends
+from app.config import settings
 from app.dependencies import require_role
 from app.supabase_client import get_supabase
-from app.models.session import SessionStart, SetLogCreate
+from app.models.session import SessionFeedback, SessionStart, SetLogCreate
 from datetime import datetime, timezone
 
 router = APIRouter()
@@ -154,3 +156,55 @@ async def finish_session(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sessão não encontrada")
 
     return result.data[0]
+
+
+@router.post("/{session_id}/feedback", status_code=status.HTTP_201_CREATED)
+async def submit_session_feedback(
+    session_id: str,
+    body: SessionFeedback,
+    user: dict = Depends(require_role("student")),
+) -> dict:
+    """Student submits post-session feedback (rating 1-5 + optional comment).
+
+    Persists as a JSON blob in Supabase Storage — no DB table yet.
+    Path: {student_id}/{YYYY-MM-DD}/{session_id}.json
+    """
+    sb = get_supabase()
+    student_id = _get_student_id(sb, user["sub"])
+
+    # Verify session belongs to this student
+    session = (
+        sb.table("workout_sessions")
+        .select("id, workout_id, workout_name, started_at, finished_at")
+        .eq("id", session_id)
+        .eq("student_id", student_id)
+        .execute()
+    )
+    if not session.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sessão não encontrada")
+    session_row = session.data[0]
+
+    now = datetime.now(timezone.utc)
+    payload = {
+        "v": 1,
+        "session_id": session_id,
+        "student_id": student_id,
+        "workout_id": session_row.get("workout_id"),
+        "workout_name": session_row.get("workout_name"),
+        "started_at": session_row.get("started_at"),
+        "finished_at": session_row.get("finished_at"),
+        "submitted_at": now.isoformat(),
+        "rating": body.rating,
+        "comment": (body.comment or "").strip() or None,
+    }
+
+    raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    path = f"{student_id}/{now.strftime('%Y-%m-%d')}/{session_id}.json"
+
+    sb.storage.from_(settings.supabase_feedbacks_bucket).upload(
+        path,
+        raw,
+        file_options={"content-type": "application/json", "upsert": "true"},
+    )
+
+    return {"detail": "Feedback registrado", "path": path}

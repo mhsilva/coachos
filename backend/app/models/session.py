@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from uuid import UUID
 from datetime import datetime
 
@@ -12,6 +12,11 @@ class SetLogCreate(BaseModel):
     set_number: int
     reps_done: int | None = None
     weight_kg: float | None = None
+
+
+class SessionFeedback(BaseModel):
+    rating: int = Field(ge=1, le=5)
+    comment: str | None = None
 
 
 class SetLogOut(SetLogCreate):

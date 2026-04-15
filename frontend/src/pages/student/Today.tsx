@@ -55,7 +55,15 @@ interface WorkoutDetail {
   }
 }
 
-type Screen = 'loading' | 'empty' | 'list' | 'executing' | 'finished'
+type Screen = 'loading' | 'empty' | 'list' | 'executing' | 'feedback' | 'finished'
+
+const RATING_LABELS: Record<number, string> = {
+  1: 'Fácil demais',
+  2: 'Tranquilo',
+  3: 'Ok',
+  4: 'Puxado',
+  5: 'Intenso',
+}
 
 function formatDate(iso: string): string {
   const d = new Date(iso)
@@ -114,6 +122,13 @@ export default function StudentToday() {
   const [finishing, setFinishing] = useState(false)
   const [error, setError] = useState('')
 
+  // Post-session feedback
+  const [finishedSessionId, setFinishedSessionId] = useState<string | null>(null)
+  const [rating, setRating] = useState<number>(0)
+  const [hoverRating, setHoverRating] = useState<number>(0)
+  const [comment, setComment] = useState('')
+  const [submittingFeedback, setSubmittingFeedback] = useState(false)
+
   useEffect(() => {
     if (!session?.access_token) return
     createApi(session.access_token)
@@ -171,10 +186,18 @@ export default function StudentToday() {
   }
 
   async function handleFinish() {
+    if (!sessionId) return
     setFinishing(true)
     try {
+      // Snapshot id before the hook clears it inside finishSession()
+      const justFinishedId = sessionId
       await finishSession()
-      setScreen('finished')
+      setFinishedSessionId(justFinishedId)
+      setRating(0)
+      setHoverRating(0)
+      setComment('')
+      setError('')
+      setScreen('feedback')
     } catch {
       setError('Erro ao finalizar treino. Tente novamente.')
     } finally {
@@ -182,9 +205,34 @@ export default function StudentToday() {
     }
   }
 
+  async function handleSubmitFeedback() {
+    if (!session?.access_token || !finishedSessionId || rating === 0) return
+    setSubmittingFeedback(true)
+    setError('')
+    try {
+      await createApi(session.access_token).post(
+        `/sessions/${finishedSessionId}/feedback`,
+        { rating, comment: comment.trim() || null },
+      )
+      setScreen('finished')
+    } catch {
+      setError('Erro ao enviar feedback. Tente novamente.')
+    } finally {
+      setSubmittingFeedback(false)
+    }
+  }
+
+  function handleSkipFeedback() {
+    setScreen('finished')
+  }
+
   function handleBackToList() {
     setSelected(null)
     setCompletedExercises(new Set())
+    setFinishedSessionId(null)
+    setRating(0)
+    setHoverRating(0)
+    setComment('')
     setError('')
     if (!session?.access_token) return
     createApi(session.access_token)
@@ -321,6 +369,110 @@ export default function StudentToday() {
                 )}
               </div>
             ))}
+          </div>
+        </div>
+      </AppLayout>
+    )
+  }
+
+  if (screen === 'feedback') {
+    const displayRating = hoverRating || rating
+    return (
+      <AppLayout>
+        <div className="px-4 py-8 md:px-8 max-w-lg">
+          <div className="text-center">
+            <p className="text-5xl mb-3">💪</p>
+            <h2 className="font-syne font-extrabold text-2xl text-teal tracking-[-0.02em]">
+              Treino finalizado!
+            </h2>
+            <p className="text-teal/55 text-sm mt-1.5">
+              Como foi essa sessão?
+            </p>
+          </div>
+
+          <div className="bg-white rounded-card border border-teal/[0.09] shadow-card p-5 mt-6">
+            {/* Stars */}
+            <div className="flex items-center justify-between gap-2">
+              {[1, 2, 3, 4, 5].map(n => {
+                const active = displayRating >= n
+                return (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setRating(n)}
+                    onMouseEnter={() => setHoverRating(n)}
+                    onMouseLeave={() => setHoverRating(0)}
+                    className="p-1 transition-transform active:scale-90 hover:scale-110"
+                    aria-label={`${n} — ${RATING_LABELS[n]}`}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      className={`w-9 h-9 transition-colors ${
+                        active ? 'text-copper' : 'text-teal/15'
+                      }`}
+                      fill="currentColor"
+                    >
+                      <path d="M12 2.5l2.92 6.36 6.96.78-5.2 4.74 1.44 6.86L12 17.77l-6.12 3.47 1.44-6.86L2.12 9.64l6.96-.78L12 2.5z" />
+                    </svg>
+                  </button>
+                )
+              })}
+            </div>
+            <div className="flex items-center justify-between text-[11px] text-teal/45 mt-1 px-1">
+              <span>Fácil demais</span>
+              <span>Intenso</span>
+            </div>
+            <p className="text-center font-syne font-bold text-teal text-sm mt-3 h-5">
+              {displayRating > 0 ? RATING_LABELS[displayRating] : '\u00A0'}
+            </p>
+
+            {/* Comment */}
+            <div className="mt-5">
+              <label className="text-xs font-medium text-teal/50 uppercase tracking-wide">
+                Comentário
+              </label>
+              <textarea
+                value={comment}
+                onChange={e => setComment(e.target.value)}
+                rows={5}
+                placeholder="Conte como foi: sentiu alguma dor, incômodo ou dificuldade? Algum exercício especialmente pesado ou leve? Tudo que você quiser compartilhar ajuda a gente a ajustar seu treino."
+                className="
+                  mt-1.5 w-full rounded-btn border border-teal/[0.12] bg-surface
+                  px-3 py-2.5 text-sm text-teal placeholder:text-teal/35
+                  focus:outline-none focus:border-copper/60 focus:bg-white
+                  transition-colors resize-none
+                "
+                maxLength={2000}
+              />
+            </div>
+
+            {error && <p className="text-sm text-red-500 mt-3">{error}</p>}
+
+            <button
+              type="button"
+              onClick={handleSubmitFeedback}
+              disabled={rating === 0 || submittingFeedback}
+              className="
+                mt-5 w-full bg-copper text-white rounded-btn py-3.5
+                font-syne font-bold text-sm shadow-btn
+                hover:opacity-90 active:scale-[0.98]
+                transition-all disabled:opacity-40
+              "
+            >
+              {submittingFeedback ? 'Enviando...' : 'Enviar feedback'}
+            </button>
+            <button
+              type="button"
+              onClick={handleSkipFeedback}
+              disabled={submittingFeedback}
+              className="
+                mt-2 w-full text-sm text-teal/50 hover:text-teal
+                py-2 transition-colors disabled:opacity-40
+              "
+            >
+              Pular
+            </button>
           </div>
         </div>
       </AppLayout>
