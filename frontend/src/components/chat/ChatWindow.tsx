@@ -44,6 +44,7 @@ export function ChatWindow({ chatId, readOnly = false }: Props) {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const canSend = useMemo(() => {
     if (readOnly) return false
@@ -132,6 +133,10 @@ export function ChatWindow({ chatId, readOnly = false }: Props) {
       })
     } finally {
       setSending(false)
+      // textarea is `disabled` while sending, so the browser drops focus.
+      // Re-focus on next tick (after React re-enables it) so the user can
+      // type the next answer without clicking.
+      setTimeout(() => textareaRef.current?.focus(), 0)
     }
   }
 
@@ -188,6 +193,7 @@ export function ChatWindow({ chatId, readOnly = false }: Props) {
         <div className="border-t border-teal/[0.08] pt-3 px-4 md:px-0 bg-surface">
           <div className="flex items-end gap-2">
             <textarea
+              ref={textareaRef}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => {
