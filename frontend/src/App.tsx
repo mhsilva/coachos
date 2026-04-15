@@ -14,6 +14,7 @@ import StudentToday from './pages/student/Today'
 import StudentHistory from './pages/student/History'
 import StudentProfile from './pages/student/Profile'
 import StudentChat from './pages/student/Chat'
+import StudentAssessmentFill from './pages/student/AssessmentFill'
 import CoachChatTranscript from './pages/coach/ChatTranscript'
 import AdminCoaches from './pages/admin/Coaches'
 import Notifications from './pages/Notifications'
@@ -55,6 +56,7 @@ export default function App() {
               <Route path="/student/history" element={<StudentHistory />} />
               <Route path="/student/profile" element={<StudentProfile />} />
               <Route path="/student/chat/:id" element={<StudentChat />} />
+              <Route path="/student/assessments/:id/fill" element={<StudentAssessmentFill />} />
             </Route>
 
             <Route element={<ProtectedRoute allowedRoles={['admin']} />}>

@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { AppLayout } from '../../components/AppLayout'
+import { AssessmentsTab } from '../../components/AssessmentsTab'
 import { useAuth } from '../../hooks/useAuth'
 import { createApi } from '../../lib/api'
 
@@ -471,8 +472,8 @@ export default function CoachStudentDetail() {
             )}
 
             {/* ═══════════════ TAB: Avaliações ═══════════════ */}
-            {activeTab === 'avaliacoes' && (
-              <TabPlaceholder label="Avaliações" description="Avaliação física, medidas corporais e fotos." />
+            {activeTab === 'avaliacoes' && id && session?.access_token && (
+              <AssessmentsTab studentId={id} token={session.access_token} />
             )}
 
             {/* ═══════════════ TAB: Testes ═══════════════ */}

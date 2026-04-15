@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.routers import auth, workouts, sessions, dashboard, notifications, chats, students, catalog
+from app.routers import auth, workouts, sessions, dashboard, notifications, chats, students, catalog, assessments
 
 app = FastAPI(title="CoachOS API", version="0.1.0")
 
@@ -21,6 +21,7 @@ app.include_router(notifications.router, prefix="/notifications", tags=["notific
 app.include_router(chats.router, prefix="/chats", tags=["chats"])
 app.include_router(students.router, prefix="/students", tags=["students"])
 app.include_router(catalog.router, prefix="/catalog", tags=["catalog"])
+app.include_router(assessments.router, prefix="/assessments", tags=["assessments"])
 
 
 @app.get("/health", tags=["health"])

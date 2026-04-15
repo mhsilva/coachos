@@ -392,6 +392,64 @@ create policy "chats: coach reads own students"
   );
 
 -- ──────────────────────────────────────────────
+-- ASSESSMENTS — physical assessment requests + submissions
+-- Coach requests; student fills (3 photos + weight/BF + body measurements).
+-- Photos live in Supabase Storage bucket `assessments`;
+-- only the storage path is kept here.
+-- ──────────────────────────────────────────────
+
+create table if not exists assessments (
+  id             uuid primary key default gen_random_uuid(),
+  coach_id       uuid not null references coaches(id) on delete cascade,
+  student_id     uuid not null references students(id) on delete cascade,
+  status         text not null default 'pending' check (status in ('pending', 'submitted', 'cancelled')),
+  requested_at   timestamptz default now(),
+  submitted_at   timestamptz,
+
+  -- Composition
+  weight_kg      numeric(5,1),
+  body_fat_pct   numeric(4,1),
+
+  -- Body measurements (cm)
+  chest_cm        numeric(5,1),
+  waist_narrow_cm numeric(5,1),
+  waist_navel_cm  numeric(5,1),
+  hip_cm          numeric(5,1),
+  biceps_r_cm     numeric(5,1),
+  forearm_r_cm    numeric(5,1),
+  thigh_r_cm      numeric(5,1),
+  calf_r_cm       numeric(5,1),
+
+  -- Storage paths (relative to the `assessments` bucket)
+  photo_front_path text,
+  photo_back_path  text,
+  photo_side_path  text
+);
+
+-- Only one pending assessment per (coach, student) at a time
+create unique index if not exists uq_assessments_pending
+  on assessments (coach_id, student_id)
+  where status = 'pending';
+
+create index if not exists idx_assessments_student
+  on assessments (student_id, submitted_at desc);
+
+create index if not exists idx_assessments_coach_student
+  on assessments (coach_id, student_id, submitted_at desc);
+
+alter table assessments enable row level security;
+
+create policy "assessments: coach reads own students"
+  on assessments for select using (
+    coach_id in (select id from coaches where user_id = auth.uid())
+  );
+
+create policy "assessments: student reads own"
+  on assessments for select using (
+    student_id in (select id from students where user_id = auth.uid())
+  );
+
+-- ──────────────────────────────────────────────
 -- HELPER: assign role to a user (run in SQL Editor)
 -- ──────────────────────────────────────────────
 -- update auth.users

@@ -40,6 +40,21 @@ export function createApi(token: string) {
 
     delete: <T>(path: string) =>
       request<T>(path, { method: 'DELETE' }, token),
+
+    // FormData POST — lets the browser set the multipart boundary.
+    postForm: async <T>(path: string, form: FormData): Promise<T> => {
+      const res = await fetch(`${BASE_URL}${path}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }))
+        throw new Error((err as { detail?: string }).detail ?? 'Erro desconhecido')
+      }
+      if (res.status === 204) return {} as T
+      return res.json() as Promise<T>
+    },
   }
 }
 

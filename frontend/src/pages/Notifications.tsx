@@ -58,6 +58,21 @@ export default function Notifications() {
     }
   }
 
+  async function handleOpenAssessment(n: Notification) {
+    const assessmentId = n.payload?.assessment_id
+    if (!assessmentId) return
+    await markRead(n.id)
+    if (n.type === 'assessment_requested') {
+      navigate(`/student/assessments/${assessmentId}/fill`)
+    } else if (n.type === 'assessment_submitted') {
+      // Coach jumps to the student's detail page (the assessments tab is inside).
+      // We look up the student via the assessment to keep the notification payload lean.
+      // Simpler path: if the coach included student_id in the payload, use it.
+      const studentId = n.payload?.student_id
+      if (studentId) navigate(`/coach/students/${studentId}`)
+    }
+  }
+
   async function fetchNotifications() {
     if (!session?.access_token) return
     try {
@@ -209,6 +224,26 @@ export default function Notifications() {
                     className="mt-3 w-full border border-teal/[0.15] text-teal rounded-btn py-2 text-sm font-medium hover:bg-surface transition-colors"
                   >
                     Ver transcript
+                  </button>
+                )}
+
+                {/* Assessment actions */}
+                {n.type === 'assessment_requested' && (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenAssessment(n)}
+                    className="mt-3 w-full bg-copper text-white rounded-btn py-2 text-sm font-medium shadow-btn hover:opacity-90 transition-all"
+                  >
+                    Preencher avaliação
+                  </button>
+                )}
+                {n.type === 'assessment_submitted' && n.payload?.student_id && (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenAssessment(n)}
+                    className="mt-3 w-full border border-teal/[0.15] text-teal rounded-btn py-2 text-sm font-medium hover:bg-surface transition-colors"
+                  >
+                    Ver avaliação
                   </button>
                 )}
 

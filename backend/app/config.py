@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     upstash_redis_rest_url: str = ""
     upstash_redis_rest_token: str = ""
     supabase_chats_bucket: str = "chats"
+    supabase_assessments_bucket: str = "assessments"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
