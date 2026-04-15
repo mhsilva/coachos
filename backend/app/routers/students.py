@@ -265,17 +265,18 @@ async def patch_injury(
     return res.data[0]
 
 
-@router.delete("/{student_id}/injuries/{injury_id}", status_code=204)
+@router.delete("/{student_id}/injuries/{injury_id}", status_code=200)
 async def delete_injury(
     student_id: str,
     injury_id: str,
     user: dict = Depends(require_role("coach")),
-) -> None:
+) -> dict:
     sb = get_supabase()
     coach_id = _get_coach_id(sb, user["sub"])
     _assert_coach_owns(sb, coach_id, student_id)
 
     sb.table("student_injuries").delete().eq("id", injury_id).eq("student_id", student_id).execute()
+    return {"detail": "Lesão removida"}
 
 
 @router.post("/{student_id}/health-conditions", status_code=201)
@@ -298,17 +299,18 @@ async def create_health_condition(
     return inserted.data[0]
 
 
-@router.delete("/{student_id}/health-conditions/{hc_id}", status_code=204)
+@router.delete("/{student_id}/health-conditions/{hc_id}", status_code=200)
 async def delete_health_condition(
     student_id: str,
     hc_id: str,
     user: dict = Depends(require_role("coach")),
-) -> None:
+) -> dict:
     sb = get_supabase()
     coach_id = _get_coach_id(sb, user["sub"])
     _assert_coach_owns(sb, coach_id, student_id)
 
     sb.table("student_health_conditions").delete().eq("id", hc_id).eq("student_id", student_id).execute()
+    return {"detail": "Condição removida"}
 
 
 @router.post("/{student_id}/medications", status_code=201)
@@ -331,17 +333,18 @@ async def create_medication(
     return inserted.data[0]
 
 
-@router.delete("/{student_id}/medications/{med_id}", status_code=204)
+@router.delete("/{student_id}/medications/{med_id}", status_code=200)
 async def delete_medication(
     student_id: str,
     med_id: str,
     user: dict = Depends(require_role("coach")),
-) -> None:
+) -> dict:
     sb = get_supabase()
     coach_id = _get_coach_id(sb, user["sub"])
     _assert_coach_owns(sb, coach_id, student_id)
 
     sb.table("student_medications").delete().eq("id", med_id).eq("student_id", student_id).execute()
+    return {"detail": "Medicamento removido"}
 
 
 @router.post("/{student_id}/surgeries", status_code=201)
@@ -364,14 +367,15 @@ async def create_surgery(
     return inserted.data[0]
 
 
-@router.delete("/{student_id}/surgeries/{surgery_id}", status_code=204)
+@router.delete("/{student_id}/surgeries/{surgery_id}", status_code=200)
 async def delete_surgery(
     student_id: str,
     surgery_id: str,
     user: dict = Depends(require_role("coach")),
-) -> None:
+) -> dict:
     sb = get_supabase()
     coach_id = _get_coach_id(sb, user["sub"])
     _assert_coach_owns(sb, coach_id, student_id)
 
     sb.table("student_surgeries").delete().eq("id", surgery_id).eq("student_id", student_id).execute()
+    return {"detail": "Cirurgia removida"}
