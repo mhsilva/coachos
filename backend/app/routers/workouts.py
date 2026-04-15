@@ -10,6 +10,60 @@ from app.models.workout import (
 router = APIRouter()
 
 
+# ── helpers ────────────────────────────────────────────────
+
+# Keep the API shape backwards-compatible: merge catalog fields (name, demo_url)
+# into the exercise row so the frontend keeps reading `name` / `demo_url`.
+def _flatten_exercise(ex: dict) -> dict:
+    cat = ex.pop("exercise_catalog", None) or {}
+    ex["name"] = cat.get("name")
+    ex["demo_url"] = cat.get("demo_url")
+    return ex
+
+
+def _resolve_catalog_id(sb, coach_id: str, body: ExerciseCreate) -> str:
+    """Return a valid catalog_id owned by coach_id.
+
+    - If body.catalog_id is given, verify it belongs to this coach.
+    - Otherwise, match by case-insensitive name or create a new entry.
+    """
+    if body.catalog_id:
+        owned = (
+            sb.table("exercise_catalog")
+            .select("id")
+            .eq("id", str(body.catalog_id))
+            .eq("coach_id", coach_id)
+            .execute()
+        )
+        if not owned.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Exercício do catálogo não encontrado",
+            )
+        return owned.data[0]["id"]
+
+    name = (body.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nome obrigatório")
+
+    existing = (
+        sb.table("exercise_catalog")
+        .select("id")
+        .eq("coach_id", coach_id)
+        .ilike("name", name)
+        .execute()
+    )
+    if existing.data:
+        return existing.data[0]["id"]
+
+    created = sb.table("exercise_catalog").insert({
+        "coach_id": coach_id,
+        "name": name,
+        "demo_url": body.demo_url,
+    }).execute()
+    return created.data[0]["id"]
+
+
 @router.get("/mine")
 async def get_my_workouts(user: dict = Depends(require_role("student"))) -> dict:
     """Return coach info + all workout plans (with workouts) for the student, grouped by plan."""
@@ -151,11 +205,12 @@ async def get_workout_detail(
 
     exercises = (
         sb.table("exercises")
-        .select("*")
+        .select("*, exercise_catalog(name, demo_url)")
         .eq("workout_id", workout_id)
         .order("order_index")
         .execute()
     )
+    flat_exercises = [_flatten_exercise(ex) for ex in (exercises.data or [])]
 
     w = workout.data[0]
     return {
@@ -173,7 +228,7 @@ async def get_workout_detail(
             "content": w.get("content"),
             "notes": w.get("notes"),
             "estimated_duration_min": w.get("estimated_duration_min"),
-            "exercises": exercises.data,
+            "exercises": flat_exercises,
         },
     }
 
@@ -219,7 +274,7 @@ async def get_plan(
 
     plan = (
         sb.table("workout_plans")
-        .select("*, workouts(*, exercises(*))")
+        .select("*, workouts(*, exercises(*, exercise_catalog(name, demo_url)))")
         .eq("id", plan_id)
         .eq("coach_id", coach.data[0]["id"])
         .execute()
@@ -229,10 +284,9 @@ async def get_plan(
 
     result = plan.data[0]
     for workout in result.get("workouts") or []:
-        workout["exercises"] = sorted(
-            workout.get("exercises") or [],
-            key=lambda e: e.get("order_index", 0),
-        )
+        flat = [_flatten_exercise(e) for e in (workout.get("exercises") or [])]
+        flat.sort(key=lambda e: e.get("order_index", 0))
+        workout["exercises"] = flat
 
     return result
 
@@ -447,7 +501,7 @@ async def add_exercise(
 ) -> dict:
     sb = get_supabase()
 
-    # Verify the workout belongs to this coach (via plan)
+    # Verify the workout belongs to this coach (via plan) and get coach_id
     workout = (
         sb.table("workouts")
         .select("id, workout_plans!inner(coach_id, coaches!inner(user_id))")
@@ -457,14 +511,21 @@ async def add_exercise(
     if not workout.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workout não encontrado")
 
+    plan_data = workout.data[0].get("workout_plans") or {}
+    coach_owner = (plan_data.get("coaches") or {}).get("user_id")
+    if coach_owner != user["sub"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Workout não pertence a você")
+
+    coach_id = plan_data.get("coach_id")
+    catalog_id = _resolve_catalog_id(sb, coach_id, body)
+
     exercise = sb.table("exercises").insert({
         "workout_id": workout_id,
-        "name": body.name,
+        "catalog_id": catalog_id,
         "sets": body.sets,
         "reps_min": body.reps_min,
         "reps_max": body.reps_max,
         "order_index": body.order_index,
-        "demo_url": body.demo_url,
         "rest_seconds": body.rest_seconds,
         "warmup_type": body.warmup_type,
         "warmup_sets": body.warmup_sets,
@@ -472,4 +533,12 @@ async def add_exercise(
         "notes": body.notes,
     }).execute()
 
-    return exercise.data[0]
+    # Return with catalog fields flattened so the frontend keeps its shape
+    inserted_id = exercise.data[0]["id"]
+    full = (
+        sb.table("exercises")
+        .select("*, exercise_catalog(name, demo_url)")
+        .eq("id", inserted_id)
+        .execute()
+    )
+    return _flatten_exercise(full.data[0])

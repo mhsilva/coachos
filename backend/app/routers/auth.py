@@ -231,6 +231,12 @@ async def respond_invite(
             "resolved_at": now,
         }).eq("id", str(body.invite_id)).execute()
 
+        # Wipe data that belonged to the previous coach (plans cascade to workouts,
+        # exercises, sessions and set_logs; chats hold anamnese/feedback containers).
+        # The previous coach's exercise_catalog is NOT touched — it belongs to them.
+        sb.table("workout_plans").delete().eq("student_id", student_id).execute()
+        sb.table("chats").delete().eq("student_id", student_id).execute()
+
         # Link student to coach
         sb.table("students").update({
             "coach_id": invite_data["coach_id"],

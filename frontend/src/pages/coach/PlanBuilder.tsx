@@ -1,8 +1,14 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { AppLayout } from '../../components/AppLayout'
 import { useAuth } from '../../hooks/useAuth'
 import { createApi } from '../../lib/api'
+
+interface CatalogSuggestion {
+  id: string
+  name: string
+  demo_url: string | null
+}
 
 interface Exercise {
   id: string
@@ -82,11 +88,11 @@ export default function PlanBuilder() {
   // Exercise management
   const [addingExerciseToId, setAddingExerciseToId] = useState<string | null>(null)
   const [exName, setExName] = useState('')
+  const [exCatalogId, setExCatalogId] = useState<string | null>(null)
   const [exSets, setExSets] = useState('')
   const [exRepsMin, setExRepsMin] = useState('')
   const [exRepsMax, setExRepsMax] = useState('')
   const [exRest, setExRest] = useState('')
-  const [exDemoUrl, setExDemoUrl] = useState('')
   const [exWarmupEnabled, setExWarmupEnabled] = useState(false)
   const [exWarmupType, setExWarmupType] = useState<'aquecimento' | 'reconhecimento'>('aquecimento')
   const [exWarmupSets, setExWarmupSets] = useState('')
@@ -96,6 +102,11 @@ export default function PlanBuilder() {
 
   // Exercise notes
   const [exNotes, setExNotes] = useState('')
+
+  // Catalog autocomplete
+  const [exSuggestions, setExSuggestions] = useState<CatalogSuggestion[]>([])
+  const [exShowDropdown, setExShowDropdown] = useState(false)
+  const exDebounceRef = useRef<number | null>(null)
 
   // Inline editing
   const [editingPlanName, setEditingPlanName] = useState(false)
@@ -278,17 +289,52 @@ export default function PlanBuilder() {
   // -- Add exercise --
   function resetExerciseForm() {
     setExName('')
+    setExCatalogId(null)
+    setExSuggestions([])
+    setExShowDropdown(false)
     setExSets('')
     setExRepsMin('')
     setExRepsMax('')
     setExRest('')
-    setExDemoUrl('')
     setExWarmupEnabled(false)
     setExWarmupType('aquecimento')
     setExWarmupSets('')
     setExWarmupReps('')
     setExNotes('')
     setExerciseError('')
+  }
+
+  // Debounced catalog search. Any time the user edits the name input, the
+  // previously-selected catalog_id is cleared — they must pick again from
+  // the dropdown (or let the backend upsert by name on submit).
+  function handleExNameChange(value: string) {
+    setExName(value)
+    setExCatalogId(null)
+    if (exDebounceRef.current) window.clearTimeout(exDebounceRef.current)
+    if (!api || !value.trim()) {
+      setExSuggestions([])
+      setExShowDropdown(false)
+      return
+    }
+    exDebounceRef.current = window.setTimeout(async () => {
+      try {
+        const data = await api.get<CatalogSuggestion[]>(
+          `/catalog?q=${encodeURIComponent(value.trim())}`,
+        )
+        setExSuggestions(data)
+        setExShowDropdown(data.length > 0)
+      } catch {
+        setExSuggestions([])
+        setExShowDropdown(false)
+      }
+    }, 200)
+  }
+
+  function pickSuggestion(s: CatalogSuggestion) {
+    setExName(s.name)
+    setExCatalogId(s.id)
+    setExSuggestions([])
+    setExShowDropdown(false)
   }
 
   async function handleAddExercise(e: React.FormEvent, workoutId: string) {
@@ -302,12 +348,14 @@ export default function PlanBuilder() {
 
     try {
       const data = await api.post<Exercise>(`/workouts/${workoutId}/exercises`, {
-        name: exName,
+        // Either a catalog_id (picked from dropdown) or a free-text name
+        // (the backend auto-upserts it into this coach's catalog).
+        catalog_id: exCatalogId,
+        name: exCatalogId ? null : exName.trim(),
         sets: parseInt(exSets, 10),
         reps_min: parseInt(exRepsMin, 10),
         reps_max: exRepsMax ? parseInt(exRepsMax, 10) : null,
         order_index: orderIndex,
-        demo_url: exDemoUrl || null,
         rest_seconds: exRest ? parseInt(exRest, 10) : null,
         warmup_type: exWarmupEnabled ? exWarmupType : null,
         warmup_sets: exWarmupEnabled && exWarmupSets ? parseInt(exWarmupSets, 10) : null,
@@ -761,14 +809,42 @@ export default function PlanBuilder() {
                     {/* Add exercise form */}
                     {workout.format === 'freeform' ? null : addingExerciseToId === workout.id ? (
                       <form onSubmit={e => handleAddExercise(e, workout.id)} className="mt-3 space-y-3 pt-3 border-t border-teal/[0.06]">
-                        <input
-                          type="text"
-                          value={exName}
-                          onChange={e => setExName(e.target.value)}
-                          required
-                          placeholder="Nome do exercício"
-                          className="w-full border border-teal/[0.15] rounded-btn px-3 py-2 text-sm text-teal placeholder:text-teal/25 focus:outline-none focus:border-copper transition-colors"
-                        />
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={exName}
+                            onChange={e => handleExNameChange(e.target.value)}
+                            onFocus={() => { if (exSuggestions.length > 0) setExShowDropdown(true) }}
+                            onBlur={() => { setTimeout(() => setExShowDropdown(false), 150) }}
+                            required
+                            autoComplete="off"
+                            placeholder="Nome do exercício — busca no catálogo"
+                            className="w-full border border-teal/[0.15] rounded-btn px-3 py-2 text-sm text-teal placeholder:text-teal/25 focus:outline-none focus:border-copper transition-colors"
+                          />
+                          {exCatalogId && (
+                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-medium text-copper bg-copper/10 px-1.5 py-0.5 rounded">
+                              catálogo
+                            </span>
+                          )}
+                          {exShowDropdown && exSuggestions.length > 0 && (
+                            <div className="absolute z-10 left-0 right-0 mt-1 bg-white border border-teal/[0.12] rounded-btn shadow-card max-h-48 overflow-y-auto">
+                              {exSuggestions.map(s => (
+                                <button
+                                  type="button"
+                                  key={s.id}
+                                  onMouseDown={e => { e.preventDefault(); pickSuggestion(s) }}
+                                  className="w-full text-left px-3 py-2 text-sm text-teal hover:bg-surface transition-colors flex items-center justify-between gap-2"
+                                >
+                                  <span className="truncate">{s.name}</span>
+                                  {s.demo_url && <span className="text-[10px] text-copper shrink-0">vídeo</span>}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-teal/40 -mt-1">
+                          Novos nomes entram no catálogo automaticamente. Vídeo se gerencia em <Link to="/coach/catalogo" className="text-copper hover:underline">Catálogo</Link>.
+                        </p>
                         <div className="grid grid-cols-3 gap-2">
                           <div>
                             <label className="block text-xs text-teal/40 mb-1">Séries</label>
@@ -804,12 +880,6 @@ export default function PlanBuilder() {
                             className="w-full border border-teal/[0.15] rounded-btn px-3 py-2 text-sm text-teal placeholder:text-teal/25 focus:outline-none focus:border-copper transition-colors font-jetbrains"
                           />
                         </div>
-
-                        <input
-                          type="url" value={exDemoUrl} onChange={e => setExDemoUrl(e.target.value)}
-                          placeholder="Link de demonstração (opcional)"
-                          className="w-full border border-teal/[0.15] rounded-btn px-3 py-2 text-sm text-teal placeholder:text-teal/25 focus:outline-none focus:border-copper transition-colors"
-                        />
 
                         <textarea
                           value={exNotes} onChange={e => setExNotes(e.target.value)}

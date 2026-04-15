@@ -9,7 +9,6 @@ interface SetLog {
   set_number: number
   weight_kg: number | null
   reps_done: number | null
-  exercises: { name: string } | null
 }
 
 interface Session {
@@ -79,10 +78,10 @@ export default function StudentHistory() {
             const duration = formatDuration(s.started_at, s.finished_at)
             const isExpanded = expandedId === s.id
 
-            // Group set_logs by exercise name (prefer live join, fallback to snapshot)
+            // Group set_logs by exercise name (snapshot)
             const byExercise: Record<string, SetLog[]> = {}
             for (const log of s.set_logs) {
-              const name = log.exercises?.name ?? log.exercise_name ?? 'Exercício removido'
+              const name = log.exercise_name ?? 'Exercício removido'
               if (!byExercise[name]) byExercise[name] = []
               byExercise[name].push(log)
             }

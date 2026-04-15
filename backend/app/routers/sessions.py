@@ -22,7 +22,7 @@ async def get_my_sessions(user: dict = Depends(require_role("student"))) -> list
 
     sessions = (
         sb.table("workout_sessions")
-        .select("id, started_at, finished_at, workout_id, workout_name, workouts(name), set_logs(*, exercises(name))")
+        .select("id, started_at, finished_at, workout_id, workout_name, workouts(name), set_logs(*)")
         .eq("student_id", student_id)
         .not_.is_("finished_at", "null")
         .order("started_at", desc=True)
@@ -110,9 +110,17 @@ async def log_set(
     if not session.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sessão não encontrada")
 
-    # Snapshot exercise name so history survives deletion
-    exercise = sb.table("exercises").select("name").eq("id", str(body.exercise_id)).execute()
-    exercise_name = exercise.data[0]["name"] if exercise.data else None
+    # Snapshot exercise name (resolved via catalog) so history survives deletion
+    exercise = (
+        sb.table("exercises")
+        .select("exercise_catalog(name)")
+        .eq("id", str(body.exercise_id))
+        .execute()
+    )
+    exercise_name = None
+    if exercise.data:
+        cat = exercise.data[0].get("exercise_catalog") or {}
+        exercise_name = cat.get("name")
 
     log = sb.table("set_logs").insert({
         "session_id": session_id,

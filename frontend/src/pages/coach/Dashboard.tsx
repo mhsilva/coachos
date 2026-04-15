@@ -14,7 +14,7 @@ interface RecentLoad {
   weight_kg: number
   reps_done: number | null
   logged_at: string
-  exercises: { name: string } | null
+  exercise_name: string | null
   set_number: number
   workout_sessions: {
     student_id: string
@@ -165,7 +165,7 @@ export default function CoachDashboard() {
                                   {studentName}
                                 </td>
                                 <td className="px-4 py-3 text-teal font-medium text-xs truncate max-w-[120px]">
-                                  {log.exercises?.name ?? '—'}
+                                  {log.exercise_name ?? '—'}
                                 </td>
                                 <td className="px-4 py-3 text-right font-jetbrains text-teal text-xs whitespace-nowrap">
                                   {log.weight_kg} kg

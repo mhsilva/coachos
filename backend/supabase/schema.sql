@@ -59,15 +59,29 @@ create table if not exists workouts (
   created_at             timestamptz default now()
 );
 
+-- Per-coach exercise catalog (source of truth for movement name + demo video)
+create table if not exists exercise_catalog (
+  id         uuid primary key default gen_random_uuid(),
+  coach_id   uuid not null references coaches(id) on delete cascade,
+  name       text not null,
+  demo_url   text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create unique index if not exists uq_exercise_catalog_coach_name
+  on exercise_catalog (coach_id, lower(name));
+create index if not exists idx_exercise_catalog_coach
+  on exercise_catalog (coach_id);
+
 create table if not exists exercises (
   id           uuid primary key default gen_random_uuid(),
   workout_id   uuid references workouts(id) on delete cascade,
-  name         text not null,
+  catalog_id   uuid not null references exercise_catalog(id) on delete restrict,
   sets         int not null,
   reps_min     int not null,
   reps_max     int,
   order_index  int not null,
-  demo_url     text,
   rest_seconds int,
   warmup_type  text check (warmup_type in ('aquecimento', 'reconhecimento')),
   warmup_sets  int,
@@ -119,6 +133,7 @@ create index if not exists idx_workout_plans_coach   on workout_plans (coach_id)
 create index if not exists idx_workout_plans_student on workout_plans (student_id);
 create index if not exists idx_workouts_plan         on workouts (plan_id);
 create index if not exists idx_exercises_workout     on exercises (workout_id);
+create index if not exists idx_exercises_catalog      on exercises (catalog_id);
 create index if not exists idx_sessions_student      on workout_sessions (student_id, started_at desc);
 create index if not exists idx_sessions_workout      on workout_sessions (workout_id);
 create index if not exists idx_set_logs_session      on set_logs (session_id);
@@ -184,14 +199,15 @@ create trigger on_profile_created
 -- ROW LEVEL SECURITY
 -- ──────────────────────────────────────────────
 
-alter table profiles         enable row level security;
-alter table coaches          enable row level security;
-alter table students         enable row level security;
-alter table workout_plans    enable row level security;
-alter table workouts         enable row level security;
-alter table exercises        enable row level security;
-alter table workout_sessions enable row level security;
-alter table set_logs         enable row level security;
+alter table profiles          enable row level security;
+alter table coaches           enable row level security;
+alter table students          enable row level security;
+alter table workout_plans     enable row level security;
+alter table workouts          enable row level security;
+alter table exercise_catalog  enable row level security;
+alter table exercises         enable row level security;
+alter table workout_sessions  enable row level security;
+alter table set_logs          enable row level security;
 
 -- profiles
 create policy "profiles: own read"
@@ -266,6 +282,20 @@ create policy "exercises: student reads own"
       select w.id from workouts w
       join workout_plans wp on w.plan_id = wp.id
       where wp.student_id in (select id from students where user_id = auth.uid())
+    )
+  );
+
+-- exercise_catalog
+create policy "catalog: coach manages own"
+  on exercise_catalog for all
+  using (coach_id in (select id from coaches where user_id = auth.uid()))
+  with check (coach_id in (select id from coaches where user_id = auth.uid()));
+
+create policy "catalog: student reads coach's"
+  on exercise_catalog for select using (
+    coach_id in (
+      select coach_id from students
+      where user_id = auth.uid() and coach_id is not null
     )
   );
 

@@ -29,3 +29,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Local-only SQL scripts (wipe/migrations the user runs manually)
+*.local.sql

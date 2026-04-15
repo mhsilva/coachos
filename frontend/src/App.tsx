@@ -9,6 +9,7 @@ import CoachDashboard from './pages/coach/Dashboard'
 import CoachStudents from './pages/coach/Students'
 import CoachStudentDetail from './pages/coach/StudentDetail'
 import CoachPlanBuilder from './pages/coach/PlanBuilder'
+import CoachCatalog from './pages/coach/Catalog'
 import StudentToday from './pages/student/Today'
 import StudentHistory from './pages/student/History'
 import StudentProfile from './pages/student/Profile'
@@ -43,6 +44,7 @@ export default function App() {
               <Route path="/coach" element={<CoachDashboard />} />
               <Route path="/coach/students" element={<CoachStudents />} />
               <Route path="/coach/students/:id" element={<CoachStudentDetail />} />
+              <Route path="/coach/catalogo" element={<CoachCatalog />} />
               <Route path="/coach/students/:id/plans/new" element={<CoachPlanBuilder />} />
               <Route path="/coach/students/:id/plans/:planId" element={<CoachPlanBuilder />} />
               <Route path="/coach/students/:id/chats/:chatId" element={<CoachChatTranscript />} />

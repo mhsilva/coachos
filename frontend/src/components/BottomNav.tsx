@@ -10,6 +10,7 @@ interface NavItem {
 const coachNav: NavItem[] = [
   { label: 'Dashboard', path: '/coach' },
   { label: 'Alunos', path: '/coach/students' },
+  { label: 'Catálogo', path: '/coach/catalogo' },
   { label: 'Perfil', path: '/profile' },
 ]
 

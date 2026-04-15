@@ -67,12 +67,11 @@ async def coach_dashboard(user: dict = Depends(require_role("coach"))) -> dict:
         sessions_today = len(today_done.data)
         sessions_done_today = today_done.data
 
-        # Recent set logs with exercise name and student name
+        # Recent set logs with exercise name (snapshot) and student name
         recent = (
             sb.table("set_logs")
             .select(
-                "id, weight_kg, reps_done, logged_at, set_number,"
-                "exercises(name),"
+                "id, weight_kg, reps_done, logged_at, set_number, exercise_name,"
                 "workout_sessions!inner(student_id, students!inner(profiles(full_name)))"
             )
             .in_("workout_sessions.student_id", student_ids)
@@ -162,16 +161,15 @@ async def student_detail(
     if progression_sessions:
         logs = (
             sb.table("set_logs")
-            .select("session_id, weight_kg, exercises(name)")
+            .select("session_id, weight_kg, exercise_name")
             .in_("session_id", progression_sessions)
             .not_.is_("weight_kg", "null")
             .execute()
         )
         session_dates = {s["id"]: s["started_at"] for s in sessions_data}
         for log in logs.data:
-            exercise = log.get("exercises") or {}
             progression_logs.append({
-                "exercise_name": exercise.get("name"),
+                "exercise_name": log.get("exercise_name"),
                 "weight_kg": log["weight_kg"],
                 "started_at": session_dates.get(log["session_id"]),
             })
