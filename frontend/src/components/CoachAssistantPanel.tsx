@@ -12,6 +12,7 @@ interface Message {
 
 interface AssistantChatPayload {
   student_id: string
+  student_name: string | null
   messages: Message[]
 }
 
@@ -22,11 +23,12 @@ type StreamEvent =
 
 interface Props {
   studentId: string
-  studentName: string
+  /** Optional: pre-populate the header name. If omitted, fetched from the API. */
+  studentName?: string
   onClose?: () => void
 }
 
-export function CoachAssistantPanel({ studentId, studentName, onClose }: Props) {
+export function CoachAssistantPanel({ studentId, studentName: studentNameProp, onClose }: Props) {
   const { session } = useAuth()
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(true)
@@ -35,8 +37,11 @@ export function CoachAssistantPanel({ studentId, studentName, onClose }: Props) 
   const [input, setInput] = useState('')
   const [error, setError] = useState('')
   const [confirmReset, setConfirmReset] = useState(false)
+  const [fetchedName, setFetchedName] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const studentName = studentNameProp ?? fetchedName ?? 'este aluno'
 
   const loadChat = useCallback(async () => {
     if (!session?.access_token) return
@@ -46,12 +51,13 @@ export function CoachAssistantPanel({ studentId, studentName, onClose }: Props) 
         `/coach-assistant/${studentId}`,
       )
       setMessages(data.messages ?? [])
+      if (!studentNameProp) setFetchedName(data.student_name)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erro ao carregar conversa')
     } finally {
       setLoading(false)
     }
-  }, [session, studentId])
+  }, [session, studentId, studentNameProp])
 
   useEffect(() => {
     loadChat()

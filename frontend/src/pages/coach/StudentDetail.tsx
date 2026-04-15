@@ -11,8 +11,8 @@ import {
 } from 'recharts'
 import { AppLayout } from '../../components/AppLayout'
 import { AssessmentsTab } from '../../components/AssessmentsTab'
-import { CoachAssistantPanel } from '../../components/CoachAssistantPanel'
 import { ProfileTab } from '../../components/ProfileTab'
+import { StudentScopedLayout } from '../../components/StudentScopedLayout'
 import { useAuth } from '../../hooks/useAuth'
 import { createApi } from '../../lib/api'
 
@@ -147,7 +147,6 @@ export default function CoachStudentDetail() {
   const [sendingAnamnese, setSendingAnamnese] = useState(false)
   const [anamneseError, setAnamneseError] = useState('')
   const [reextractingId, setReextractingId] = useState<string | null>(null)
-  const [mobileAssistantOpen, setMobileAssistantOpen] = useState(false)
 
   const fetchData = useCallback(() => {
     if (!session?.access_token || !id) return
@@ -230,8 +229,8 @@ export default function CoachStudentDetail() {
 
   return (
     <AppLayout>
-      <div className="px-4 py-6 md:px-8 lg:max-w-[68rem] lg:grid lg:grid-cols-[minmax(0,40rem)_22rem] lg:gap-6">
-        <div className="min-w-0">
+      <StudentScopedLayout studentId={id ?? ''}>
+      <div className="px-4 py-6 md:px-8 max-w-2xl">
         {/* Back link */}
         <Link
           to="/coach/students"
@@ -622,54 +621,8 @@ export default function CoachStudentDetail() {
             )}
           </>
         )}
-        </div>
-
-        {/* Desktop right-side assistant — only once we have the student loaded */}
-        {id && data && (
-          <aside className="hidden lg:block">
-            <div className="sticky top-6 h-[calc(100vh-3rem)]">
-              <CoachAssistantPanel studentId={id} studentName={displayName} />
-            </div>
-          </aside>
-        )}
       </div>
-
-      {/* Mobile/tablet FAB — only once the student is loaded */}
-      {id && data && (
-        <>
-          <button
-            type="button"
-            onClick={() => setMobileAssistantOpen(true)}
-            className="
-              lg:hidden fixed right-4 bottom-24 md:right-6 md:bottom-8
-              w-14 h-14 rounded-full bg-copper text-white shadow-btn
-              flex items-center justify-center
-              hover:opacity-90 active:scale-95 transition-all z-30
-            "
-            aria-label="Abrir assistente IA"
-          >
-            <span className="text-2xl">✨</span>
-          </button>
-
-          {mobileAssistantOpen && (
-            <div
-              className="lg:hidden fixed inset-0 z-40 bg-teal/40 backdrop-blur-sm flex items-stretch"
-              onClick={() => setMobileAssistantOpen(false)}
-            >
-              <div
-                className="w-full h-full p-3 md:p-6 md:max-w-md md:ml-auto"
-                onClick={e => e.stopPropagation()}
-              >
-                <CoachAssistantPanel
-                  studentId={id}
-                  studentName={displayName}
-                  onClose={() => setMobileAssistantOpen(false)}
-                />
-              </div>
-            </div>
-          )}
-        </>
-      )}
+      </StudentScopedLayout>
     </AppLayout>
   )
 }

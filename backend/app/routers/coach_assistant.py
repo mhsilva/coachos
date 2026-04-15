@@ -107,9 +107,23 @@ async def get_assistant_chat(
     coach_id = _get_coach_id(sb, user["sub"])
     _assert_coach_owns_student(sb, coach_id, student_id)
 
+    # Include the student's display name so the panel can render its header
+    # without forcing the caller to load the full student detail.
+    name_res = (
+        sb.table("students")
+        .select("profiles(full_name)")
+        .eq("id", student_id)
+        .execute()
+    )
+    student_name: str | None = None
+    if name_res.data:
+        profile = name_res.data[0].get("profiles") or {}
+        student_name = profile.get("full_name")
+
     messages = coach_assistant_store.get_messages(coach_id, student_id)
     return {
         "student_id": student_id,
+        "student_name": student_name,
         "messages": [
             {"role": m["role"], "content": m["content"], "at": m.get("at")}
             for m in messages

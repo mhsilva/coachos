@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { AppLayout } from '../../components/AppLayout'
+import { StudentScopedLayout } from '../../components/StudentScopedLayout'
 import { useAuth } from '../../hooks/useAuth'
 import { createApi } from '../../lib/api'
 
@@ -384,9 +385,11 @@ export default function PlanBuilder() {
   if (loadingPlan) {
     return (
       <AppLayout>
-        <div className="flex items-center justify-center h-64">
-          <div className="w-8 h-8 border-4 border-copper border-t-transparent rounded-full animate-spin" />
-        </div>
+        <StudentScopedLayout studentId={studentId ?? ''}>
+          <div className="flex items-center justify-center h-64">
+            <div className="w-8 h-8 border-4 border-copper border-t-transparent rounded-full animate-spin" />
+          </div>
+        </StudentScopedLayout>
       </AppLayout>
     )
   }
@@ -395,6 +398,7 @@ export default function PlanBuilder() {
   if (phase === 'create') {
     return (
       <AppLayout>
+        <StudentScopedLayout studentId={studentId ?? ''}>
         <div className="px-4 py-6 md:px-8 max-w-lg">
           <Link
             to={`/coach/students/${studentId}`}
@@ -501,6 +505,7 @@ export default function PlanBuilder() {
             </button>
           </form>
         </div>
+        </StudentScopedLayout>
       </AppLayout>
     )
   }
@@ -510,6 +515,7 @@ export default function PlanBuilder() {
 
   return (
     <AppLayout>
+      <StudentScopedLayout studentId={studentId ?? ''}>
       <div className="px-4 py-6 md:px-8 max-w-2xl">
         <Link
           to={`/coach/students/${studentId}`}
@@ -1070,6 +1076,7 @@ export default function PlanBuilder() {
           </Link>
         )}
       </div>
+      </StudentScopedLayout>
     </AppLayout>
   )
 }
