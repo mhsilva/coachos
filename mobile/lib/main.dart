@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/auth_provider.dart';
 import 'core/env.dart';
+import 'core/push_notifications.dart';
 import 'core/theme.dart';
 import 'screens/login_screen.dart';
 import 'screens/today_screen.dart';
@@ -16,6 +19,9 @@ import 'widgets/bottom_nav.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await Firebase.initializeApp();
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
   await Supabase.initialize(
     url: Env.supabaseUrl,
@@ -94,11 +100,17 @@ class _HomeShellState extends State<HomeShell> {
   @override
   void initState() {
     super.initState();
+    _initPush();
     _pollUnread();
     _pollTimer = Timer.periodic(
       const Duration(seconds: 30),
       (_) => _pollUnread(),
     );
+  }
+
+  Future<void> _initPush() async {
+    final api = context.read<AuthProvider>().api;
+    await PushNotificationService.init(api);
   }
 
   Future<void> _pollUnread() async {
