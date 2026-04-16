@@ -40,7 +40,7 @@ export function StudentScopedLayout({ studentId, children }: Props) {
         type="button"
         onClick={() => setMobileOpen(true)}
         className="
-          lg:hidden fixed right-4 bottom-24 md:right-6 md:bottom-8
+          lg:hidden fixed right-4 bottom-28 md:right-6 md:bottom-8
           w-14 h-14 rounded-full bg-copper text-white shadow-btn
           flex items-center justify-center
           hover:opacity-90 active:scale-95 transition-all z-30

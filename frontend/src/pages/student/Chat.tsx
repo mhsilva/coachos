@@ -7,8 +7,8 @@ export default function StudentChat() {
 
   return (
     <AppLayout>
-      <div className="px-0 md:px-8 py-6 max-w-2xl mx-auto">
-        <div className="px-4 md:px-0 mb-5 flex items-center justify-between">
+      <div className="flex flex-col h-[calc(100dvh-5rem)] md:h-dvh px-0 md:px-8 pt-4 pb-2 max-w-2xl mx-auto">
+        <div className="px-4 md:px-0 mb-3 shrink-0 flex items-center justify-between">
           <Link
             to="/student"
             className="inline-flex items-center gap-1 text-sm text-teal/50 hover:text-teal transition-colors"

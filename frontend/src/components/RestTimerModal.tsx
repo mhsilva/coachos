@@ -51,7 +51,7 @@ export function RestTimerModal({ seconds, onClose }: Props) {
   const pct = (remaining / seconds) * 100
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm px-4 pb-8 sm:pb-0">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
       <div className="bg-white rounded-card shadow-xl w-full max-w-xs p-6 text-center">
         <p className="text-xs text-teal/50 font-medium uppercase tracking-wider mb-4">Descanso</p>
 

@@ -155,7 +155,7 @@ export function ChatWindow({ chatId, readOnly = false }: Props) {
   const closed = meta.status === 'closed'
 
   return (
-    <div className="flex flex-col h-[calc(100vh-180px)] md:h-[calc(100vh-120px)]">
+    <div className="flex flex-col flex-1 min-h-0">
       {/* Messages */}
       <div
         ref={scrollRef}
@@ -190,7 +190,7 @@ export function ChatWindow({ chatId, readOnly = false }: Props) {
 
       {/* Composer */}
       {!readOnly && role === 'student' && !closed && (
-        <div className="border-t border-teal/[0.08] pt-3 px-4 md:px-0 bg-surface">
+        <div className="border-t border-teal/[0.08] pt-3 px-4 md:px-0 bg-surface shrink-0">
           <div className="flex items-end gap-2">
             <textarea
               ref={textareaRef}
@@ -207,7 +207,7 @@ export function ChatWindow({ chatId, readOnly = false }: Props) {
               placeholder="Escreva sua resposta…"
               className="
                 flex-1 border border-teal/[0.15] rounded-card px-3 py-2
-                text-sm text-teal font-inter resize-none
+                text-base text-teal font-inter resize-none
                 focus:outline-none focus:border-copper bg-white
                 disabled:opacity-60
               "

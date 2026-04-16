@@ -282,7 +282,7 @@ export function CoachAssistantPanel({ studentId, studentName: studentNameProp, o
               placeholder="Pergunte algo sobre o aluno…"
               className="
                 flex-1 border border-teal/[0.15] rounded-btn px-3 py-2
-                text-sm text-teal font-inter resize-none
+                text-base text-teal font-inter resize-none
                 focus:outline-none focus:border-copper bg-white
                 disabled:opacity-60
               "
