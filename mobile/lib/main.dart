@@ -8,6 +8,7 @@ import 'core/auth_provider.dart';
 import 'core/env.dart';
 import 'core/push_notifications.dart';
 import 'core/theme.dart';
+import 'firebase_options.dart';
 import 'screens/login_screen.dart';
 import 'screens/today_screen.dart';
 import 'screens/history_screen.dart';
@@ -20,7 +21,7 @@ import 'widgets/bottom_nav.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
   await Supabase.initialize(

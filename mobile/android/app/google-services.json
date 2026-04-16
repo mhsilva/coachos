@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "81424281299",
+    "project_id": "coachos-6faca",
+    "storage_bucket": "coachos-6faca.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:81424281299:android:315a7eade5595b616d2e26",
+        "android_client_info": {
+          "package_name": "com.coachos.coachos_mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyASvPuUhV3IO0dF5Ot7evdEwkc-60Pf_PU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
